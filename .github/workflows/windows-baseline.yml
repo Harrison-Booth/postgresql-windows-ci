@@ -1,0 +1,50 @@
+name: PostgreSQL Windows baseline
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: windows-baseline
+  cancel-in-progress: false
+jobs:
+  baseline:
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - runner: windows-2022
+            arch: x64
+          - runner: windows-11-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          path: ci
+          persist-credentials: false
+      - uses: actions/checkout@v6
+        with:
+          repository: postgres/postgres
+          ref: 1d45c5da3a0ad22b8e172da352ed25bd70a2253a
+          path: postgres
+          persist-credentials: false
+          fetch-depth: 1
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+          architecture: ${{ matrix.arch }}
+      - name: Build native PostgreSQL and run SQL smoke test
+        shell: pwsh
+        env:
+          TEST_ARCH: ${{ matrix.arch }}
+        run: ./ci/tools/windows-baseline.ps1 -Architecture $env:TEST_ARCH
+      - name: Upload baseline evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-baseline-${{ matrix.arch }}-${{ github.run_attempt }}
+          retention-days: 1
+          if-no-files-found: error
+          path: evidence/

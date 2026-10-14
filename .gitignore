@@ -1,0 +1,11 @@
+evidence/
+postgres/
+installation/
+baseline-data/
+__pycache__/
+*.pyc
+*.log
+*.zip
+*.exe
+*.dll
+*.pdb
