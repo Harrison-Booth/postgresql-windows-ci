@@ -1,5 +1,6 @@
-* text=auto
-*.py text eol=lf
-*.ps1 text eol=lf
+*.py -text
+*.patch -text
+*.json -text
+*.c -text
+*.sh text eol=lf
 *.yml text eol=lf
-*.md text eol=lf

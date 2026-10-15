@@ -1,0 +1,12 @@
+diff --git a/src/backend/meson.build b/src/backend/meson.build
+--- a/src/backend/meson.build
++++ b/src/backend/meson.build
+@@ -172,6 +172,8 @@
+   'name': 'postgres',
+   'target': postgres_lib,
+   'srcfiles': backend_sources,
++  # Backend bitcode needs the same declaration mode as native backend objects.
++  'additional_flags': ['-DBUILDING_DLL'],
+ }
+ 
+ pg_mod_c_args = cflags_mod

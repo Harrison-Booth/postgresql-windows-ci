@@ -1,0 +1,17 @@
+diff --git a/src/include/c.h b/src/include/c.h
+--- a/src/include/c.h
++++ b/src/include/c.h
+@@ -1596,8 +1596,13 @@
+ #ifdef WIN32
+ #ifdef __MINGW64__
+ typedef intptr_t sigjmp_buf[5];
++#ifdef __clang__
++#define sigsetjmp(x,y) __builtin_setjmp((void **) (x))
++#define siglongjmp(x,y) __builtin_longjmp((void **) (x), (y))
++#else
+ #define sigsetjmp(x,y) __builtin_setjmp(x)
+ #define siglongjmp __builtin_longjmp
++#endif
+ #else							/* !__MINGW64__ */
+ #define sigjmp_buf jmp_buf
+ #define sigsetjmp(x,y) setjmp(x)

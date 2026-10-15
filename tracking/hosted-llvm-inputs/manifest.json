@@ -1,0 +1,63 @@
+{
+  "postgresql_base": "6b3f8857aa83b214f9e7d2465d4e21d6ef75f39e",
+  "llvm_revision": "36eaf6328d1ab9fb19d806269444a0a979e83397",
+  "llvm_pr": "https://github.com/llvm/llvm-project/pull/186843",
+  "series": [
+    {
+      "file": "01-CF5671-v15-v15-0001-meson-Add-postgresql-version-llvm-jit-bitcode.pc.patch",
+      "sha256": "c059e019e5b5f284e66a80e6e8ff286e34896ea7854955afe5c719ca1c0e62b5",
+      "role": "author prerequisite"
+    },
+    {
+      "file": "02-CF5671-v15-v15-0002-meson-Add-docs-for-postgresql-version-llvm-jit-b.patch",
+      "sha256": "66efb61fa4f5ad5129c2ee3c5724169a57da74bdba65c469aef06006ddf8ee29",
+      "role": "author prerequisite"
+    },
+    {
+      "file": "03-CF5671-v15-v15-0003-meson-Add-architecture-for-LLVM-bitcode-emission.patch",
+      "sha256": "b6a1e7ff5d11bc81da940fbc2a00b128b723c16c9e93955e55577102c13401eb",
+      "role": "author prerequisite"
+    },
+    {
+      "file": "04-CF5671-v15-v15-0004-Use-.pc-file-as-a-standart-extension-build-inter.patch",
+      "sha256": "26c5dafc470909bd342ffcfef636f92a4302b9f90822a1f895a405698b5f1b6d",
+      "role": "author prerequisite"
+    },
+    {
+      "file": "05-CF5671-v15-v15-0005-meson-Add-LLVM-bitcode-emissions-for-contrib-lib.patch",
+      "sha256": "bbdb83b9ab1ad510dccf5c2d03bd6e51954ad6eea5a05c5d887bafe3eb43010c",
+      "role": "author prerequisite"
+    },
+    {
+      "file": "06-meson-CF5671-v15-supplement-v9.patch",
+      "sha256": "a553ed303a593c28c7e997d8f383312eba6141536b62144c39f9ad10f90d5eff",
+      "role": "recorded local supplement"
+    },
+    {
+      "file": "07-CF5671-v15-Windows-C-source-bitcode-only-v1.patch",
+      "sha256": "72e1462a0c8d3306da3c67e9b3baa484d1e860f1cc12c61fe3feddf0082f8cbc",
+      "role": "recorded local supplement"
+    },
+    {
+      "file": "08-cpp-header-cleanup.patch",
+      "sha256": "4a4efcfd79f90b4be51294bc0fa8dd9e65b32bc6c9eba630d3647be6419213df",
+      "role": "local C++ portability candidate; unsent"
+    },
+    {
+      "file": "09-experimental-clang-buffer-cast.patch",
+      "sha256": "66cee6a3c929a7f7458d4573f9eff967a70ee82746aa09615609c35ab74f7bfd",
+      "role": "EXPERIMENTAL only: stock Clang runtime failed; requires fixed-toolchain jump controls before any full server result"
+    },
+    {
+      "file": "10-backend-bitcode-building-dll-v1.patch",
+      "sha256": "17257f0b8baeeaf8c3fd6c3ea67e22d17aefb519148fe92111d9497eb614691b",
+      "role": "Private unsubmitted backend-only bitcode declaration-mode correction. New ten-input stack has no runtime result."
+    }
+  ],
+  "controls": {
+    "main.c": "e6a625a5f6c4923d44b8ba31e059a9c7b5a929756ad9a44758145187b73767a3",
+    "jump.c": "0e6cef624a77dbe32de1b0794d793805d9b860f2a81eeebac81d6399a3d52850"
+  },
+  "status": "packaged-not-hosted-tested",
+  "scope": "Ordered reconstruction inputs for full Windows MinGW x64 JIT verification. Not an approved submission. No LLVM ARM64 claim. All four GCC/Clang caller/callee combinations must pass before full server JIT SQL testing. Prior stock-Clang failure evidence remains authoritative. Input10 restores BUILDING_DLL only for backend bitcode, matching native backend_code; extension modules retain their own import semantics. Ten-input runtime unverified. Prior nine-input full build failed in AIO bitcode."
+}

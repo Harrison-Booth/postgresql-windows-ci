@@ -1,0 +1,114 @@
+From dea583d84ad81fac92a70ef62e5a44119096cb8f Mon Sep 17 00:00:00 2001
+From: Nazir Bilal Yavuz <byavuz81@gmail.com>
+Date: Mon, 6 Jul 2026 16:02:06 +0300
+Subject: [PATCH v15 5/5] meson: Add LLVM bitcode emissions for contrib
+ libraries
+
+The libraries for which bitcode files are generated are selected
+manually. Bitcode is only worthwhile for extensions that provide
+lightweight SQL operators/functions that can benefit from being inlined
+into JIT-compiled expressions, so this is restricted to citext, hstore,
+intarray, ltree and pg_trgm.
+
+Author: Andres Freund <andres@anarazel.de>
+Author: Nazir Bilal Yavuz <byavuz81@gmail.com>
+Author: Diego Fronza <diego.fronza@percona.com>
+Reviewed-by: Peter Eisentraut <peter@eisentraut.org>
+Reviewed-by: Diego Fronza <diego.fronza@percona.com>
+Reviewed-by: Zsolt Parragi <zsolt.parragi@percona.com>
+Discussion: https://postgr.es/m/206b001d-1884-4081-bd02-bed5c92f02ba%40eisentraut.org
+---
+ contrib/citext/meson.build   | 5 +++++
+ contrib/hstore/meson.build   | 5 +++++
+ contrib/intarray/meson.build | 5 +++++
+ contrib/ltree/meson.build    | 9 +++++++++
+ contrib/pg_trgm/meson.build  | 5 +++++
+ 5 files changed, 29 insertions(+)
+
+diff --git a/contrib/citext/meson.build b/contrib/citext/meson.build
+index 1cc49fc999f..fc29fc843f5 100644
+--- a/contrib/citext/meson.build
++++ b/contrib/citext/meson.build
+@@ -30,6 +30,11 @@ install_data(
+   kwargs: contrib_data_args,
+ )
+ 
++bitcode_modules += {
++  'target': citext,
++  'srcfiles': citext_sources,
++}
++
+ tests += {
+   'name': 'citext',
+   'sd': meson.current_source_dir(),
+diff --git a/contrib/hstore/meson.build b/contrib/hstore/meson.build
+index 6175abc708e..37a23bca0e3 100644
+--- a/contrib/hstore/meson.build
++++ b/contrib/hstore/meson.build
+@@ -43,6 +43,11 @@ install_headers(
+   install_dir: dir_include_extension / 'hstore',
+ )
+ 
++bitcode_modules += {
++  'target': hstore,
++  'srcfiles': hstore_sources,
++}
++
+ tests += {
+   'name': 'hstore',
+   'sd': meson.current_source_dir(),
+diff --git a/contrib/intarray/meson.build b/contrib/intarray/meson.build
+index e49ff77f167..24ba3110371 100644
+--- a/contrib/intarray/meson.build
++++ b/contrib/intarray/meson.build
+@@ -33,6 +33,11 @@ install_data(
+   kwargs: contrib_data_args,
+ )
+ 
++bitcode_modules += {
++  'target': intarray,
++  'srcfiles': intarray_sources,
++}
++
+ tests += {
+   'name': 'intarray',
+   'sd': meson.current_source_dir(),
+diff --git a/contrib/ltree/meson.build b/contrib/ltree/meson.build
+index f78521bfe55..b02a133ec58 100644
+--- a/contrib/ltree/meson.build
++++ b/contrib/ltree/meson.build
+@@ -41,6 +41,15 @@ install_headers(
+   install_dir: dir_include_extension / 'ltree',
+ )
+ 
++ltree_dir = meson.current_source_dir()
++bitcode_modules += {
++  'target': ltree,
++  'srcfiles': ltree_sources,
++  'additional_flags': [
++    '-I@0@'.format(ltree_dir)
++  ]
++}
++
+ tests += {
+   'name': 'ltree',
+   'sd': meson.current_source_dir(),
+diff --git a/contrib/pg_trgm/meson.build b/contrib/pg_trgm/meson.build
+index 3ecf95ba862..31b79db7c57 100644
+--- a/contrib/pg_trgm/meson.build
++++ b/contrib/pg_trgm/meson.build
+@@ -32,6 +32,11 @@ install_data(
+   kwargs: contrib_data_args,
+ )
+ 
++bitcode_modules += {
++  'target': pg_trgm,
++  'srcfiles': pg_trgm_sources,
++}
++
+ tests += {
+   'name': 'pg_trgm',
+   'sd': meson.current_source_dir(),
+-- 
+2.47.3
+

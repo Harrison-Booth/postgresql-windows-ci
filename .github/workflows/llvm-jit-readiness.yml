@@ -1,0 +1,87 @@
+name: Windows LLVM and JIT verification
+on:
+  workflow_dispatch:
+    inputs:
+      allowance_only_confirmed:
+        description: Account Actions paid overages are blocked
+        required: true
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: llvm-jit-readiness
+  cancel-in-progress: false
+jobs:
+  jit:
+    if: ${{ inputs.allowance_only_confirmed && github.repository == 'Harrison-Booth/postgresql-windows-ci' && !github.event.repository.private }}
+    runs-on: windows-2022
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          path: tracker
+      - name: Record start and prepare pinned WinFlexBison
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Path evidence | Out-Null
+          @{run_id=$env:GITHUB_RUN_ID;revision=$env:GITHUB_SHA;phase='dependency setup';scope='No compilation or runtime result yet'} | ConvertTo-Json | Set-Content evidence/start.json
+          $archive=Join-Path $env:RUNNER_TEMP 'winflex.zip'
+          $dest=Join-Path $env:RUNNER_TEMP 'winflex'
+          Invoke-WebRequest -Uri 'https://github.com/lexxmark/winflexbison/releases/download/v2.5.25/win_flex_bison-2.5.25.zip' -OutFile $archive
+          if ((Get-FileHash -LiteralPath $archive).Hash -ne '8D324B62BE33604B2C45AD1DD34AB93D722534448F55A16CA7292DE32B6AC135') { throw 'WinFlexBison checksum mismatch' }
+          Expand-Archive -LiteralPath $archive -DestinationPath $dest
+          $dest >> $env:GITHUB_PATH
+      - uses: actions/checkout@v6
+        with:
+          repository: llvm/llvm-project
+          ref: 36eaf6328d1ab9fb19d806269444a0a979e83397
+          path: llvm-source
+          sparse-checkout: |
+            llvm
+            clang
+            cmake
+            libc
+            third-party
+      - uses: actions/checkout@v6
+        with:
+          repository: postgres/postgres
+          ref: 6b3f8857aa83b214f9e7d2465d4e21d6ef75f39e
+          path: postgres
+      - name: Prepare native MinGW tools and dependencies
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-clang
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-python
+            mingw-w64-ucrt-x86_64-meson
+            mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-openssl
+            mingw-w64-ucrt-x86_64-icu
+            mingw-w64-ucrt-x86_64-zlib
+      - name: Build fixed compiler, validate jumps and run server JIT
+        shell: msys2 {0}
+        run: bash tracker/tools/run-hosted-llvm-jit.sh
+      - name: Preserve logs and runtime receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64-llvm-jit-${{ github.run_attempt }}
+          retention-days: 1
+          path: |
+            evidence/
+            postgres/build/meson-logs/
+            postgres/build/meson-info/intro-buildoptions.json
+            postgres/build/testrun/**/log/
+            postgres/build/testrun/**/regression.diffs
+            postgres/build/testrun/**/regression.out
+            llvm-build/CMakeCache.txt
+            llvm-build/compile_commands.json
+            llvm-build/CMakeFiles/CMakeConfigureLog.yaml
+          if-no-files-found: error

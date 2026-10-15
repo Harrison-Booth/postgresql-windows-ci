@@ -1,0 +1,40 @@
+diff --git a/src/backend/jit/llvm/llvmjit_inline.cpp b/src/backend/jit/llvm/llvmjit_inline.cpp
+--- a/src/backend/jit/llvm/llvmjit_inline.cpp
++++ b/src/backend/jit/llvm/llvmjit_inline.cpp
+@@ -29,7 +29,6 @@
+ extern "C"
+ {
+ #include <fcntl.h>
+-#include <sys/mman.h>
+ #include <sys/stat.h>
+ #include <sys/types.h>
+ #include <unistd.h>
+@@ -38,6 +37,12 @@
+ #include "miscadmin.h"
+ #include "storage/fd.h"
+ }
++
++/* Windows socket/signal macros collide with C++ library members. */
++#ifdef WIN32
++#undef bind
++#undef kill
++#endif
+ 
+ #include <llvm-c/Core.h>
+ #include <llvm-c/BitReader.h>
+diff --git a/src/backend/jit/llvm/llvmjit_wrap.cpp b/src/backend/jit/llvm/llvmjit_wrap.cpp
+--- a/src/backend/jit/llvm/llvmjit_wrap.cpp
++++ b/src/backend/jit/llvm/llvmjit_wrap.cpp
+@@ -15,6 +15,12 @@
+ {
+ #include "postgres.h"
+ }
++
++/* Windows socket/signal macros collide with C++ library members. */
++#ifdef WIN32
++#undef bind
++#undef kill
++#endif
+ 
+ #include <llvm-c/Core.h>
+ #include <llvm/IR/Function.h>
