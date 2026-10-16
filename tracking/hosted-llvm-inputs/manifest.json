@@ -52,6 +52,16 @@
       "file": "10-backend-bitcode-building-dll-v1.patch",
       "sha256": "17257f0b8baeeaf8c3fd6c3ea67e22d17aefb519148fe92111d9497eb614691b",
       "role": "Private unsubmitted backend-only bitcode declaration-mode correction. New ten-input stack has no runtime result."
+    },
+    {
+      "file": "11-provider-owned-data-v1.patch",
+      "sha256": "7c5d877e92ed8436e219c094a6db5b6daec4e485068d0b69dbac2f264992d9ad",
+      "role": "Private provider-owned JIT data declaration correction; not runtime-tested or approved for publication."
+    },
+    {
+      "file": "12-types-bitcode-platform-includes-v1.patch",
+      "sha256": "61321c9c87edaa1ae977e2c41f297c2fb78d097faf61684afe16de7e18bb14f0",
+      "role": "Private include-order correction; no runtime or publication approval."
     }
   ],
   "controls": {
@@ -59,5 +69,12 @@
     "jump.c": "0e6cef624a77dbe32de1b0794d793805d9b860f2a81eeebac81d6399a3d52850"
   },
   "status": "packaged-not-hosted-tested",
-  "scope": "Ordered reconstruction inputs for full Windows MinGW x64 JIT verification. Not an approved submission. No LLVM ARM64 claim. All four GCC/Clang caller/callee combinations must pass before full server JIT SQL testing. Prior stock-Clang failure evidence remains authoritative. Input10 restores BUILDING_DLL only for backend bitcode, matching native backend_code; extension modules retain their own import semantics. Ten-input runtime unverified. Prior nine-input full build failed in AIO bitcode."
+  "scope": "Ordered reconstruction inputs for full Windows MinGW x64 JIT verification. Not an approved submission. No LLVM ARM64 claim. All four GCC/Clang caller/callee combinations must pass before full server JIT SQL testing. Prior stock-Clang failure evidence remains authoritative. Input10 restores BUILDING_DLL only for backend bitcode, matching native backend_code; extension modules retain their own import semantics. Ten-input runtime unverified. Prior nine-input full build failed in AIO bitcode. Candidate revision2 adds two PostgreSQL corrections and one separate LLVM patch. All previous10 PostgreSQL patches and both source pins unchanged. New13input reconstruction is untested, unpublished and unapproved.",
+  "llvm_series": [
+    {
+      "file": "llvm-01-smallvector-template-exports-v1.patch",
+      "sha256": "06b4d5522063f00eb281a558feee4e3b0f591cbf30e7b90d29c870c9213611a4",
+      "role": "Private pinned LLVM template-export correction; distinct from PostgreSQL series."
+    }
+  ]
 }

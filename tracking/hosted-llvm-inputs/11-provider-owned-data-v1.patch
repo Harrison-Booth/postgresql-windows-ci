@@ -1,0 +1,81 @@
+--- a/src/include/jit/llvmjit.h
++++ b/src/include/jit/llvmjit.h
+@@ -70,34 +70,41 @@
+ 	List	   *handles;
+ } LLVMJitContext;
+ 
++/* Data owned by llvmjit, distinct from variables imported from postgres. */
++#if defined(WIN32) && defined(BUILDING_LLVMJIT)
++#define LLVMJIT_EXPORT PGDLLEXPORT
++#else
++#define LLVMJIT_EXPORT PGDLLIMPORT
++#endif
++
+ /* type and struct definitions */
+-extern PGDLLIMPORT LLVMTypeRef TypeParamBool;
+-extern PGDLLIMPORT LLVMTypeRef TypePGFunction;
+-extern PGDLLIMPORT LLVMTypeRef TypeSizeT;
+-extern PGDLLIMPORT LLVMTypeRef TypeDatum;
+-extern PGDLLIMPORT LLVMTypeRef TypeStorageBool;
++extern LLVMJIT_EXPORT LLVMTypeRef TypeParamBool;
++extern LLVMJIT_EXPORT LLVMTypeRef TypePGFunction;
++extern LLVMJIT_EXPORT LLVMTypeRef TypeSizeT;
++extern LLVMJIT_EXPORT LLVMTypeRef TypeDatum;
++extern LLVMJIT_EXPORT LLVMTypeRef TypeStorageBool;
+ 
+-extern PGDLLIMPORT LLVMTypeRef StructNullableDatum;
+-extern PGDLLIMPORT LLVMTypeRef StructTupleDescData;
+-extern PGDLLIMPORT LLVMTypeRef StructHeapTupleData;
+-extern PGDLLIMPORT LLVMTypeRef StructHeapTupleHeaderData;
+-extern PGDLLIMPORT LLVMTypeRef StructMinimalTupleData;
+-extern PGDLLIMPORT LLVMTypeRef StructTupleTableSlot;
+-extern PGDLLIMPORT LLVMTypeRef StructHeapTupleTableSlot;
+-extern PGDLLIMPORT LLVMTypeRef StructMinimalTupleTableSlot;
+-extern PGDLLIMPORT LLVMTypeRef StructMemoryContextData;
+-extern PGDLLIMPORT LLVMTypeRef StructFunctionCallInfoData;
+-extern PGDLLIMPORT LLVMTypeRef StructExprContext;
+-extern PGDLLIMPORT LLVMTypeRef StructExprEvalStep;
+-extern PGDLLIMPORT LLVMTypeRef StructExprState;
+-extern PGDLLIMPORT LLVMTypeRef StructAggState;
+-extern PGDLLIMPORT LLVMTypeRef StructAggStatePerTransData;
+-extern PGDLLIMPORT LLVMTypeRef StructAggStatePerGroupData;
+-extern PGDLLIMPORT LLVMTypeRef StructPlanState;
++extern LLVMJIT_EXPORT LLVMTypeRef StructNullableDatum;
++extern LLVMJIT_EXPORT LLVMTypeRef StructTupleDescData;
++extern LLVMJIT_EXPORT LLVMTypeRef StructHeapTupleData;
++extern LLVMJIT_EXPORT LLVMTypeRef StructHeapTupleHeaderData;
++extern LLVMJIT_EXPORT LLVMTypeRef StructMinimalTupleData;
++extern LLVMJIT_EXPORT LLVMTypeRef StructTupleTableSlot;
++extern LLVMJIT_EXPORT LLVMTypeRef StructHeapTupleTableSlot;
++extern LLVMJIT_EXPORT LLVMTypeRef StructMinimalTupleTableSlot;
++extern LLVMJIT_EXPORT LLVMTypeRef StructMemoryContextData;
++extern LLVMJIT_EXPORT LLVMTypeRef StructFunctionCallInfoData;
++extern LLVMJIT_EXPORT LLVMTypeRef StructExprContext;
++extern LLVMJIT_EXPORT LLVMTypeRef StructExprEvalStep;
++extern LLVMJIT_EXPORT LLVMTypeRef StructExprState;
++extern LLVMJIT_EXPORT LLVMTypeRef StructAggState;
++extern LLVMJIT_EXPORT LLVMTypeRef StructAggStatePerTransData;
++extern LLVMJIT_EXPORT LLVMTypeRef StructAggStatePerGroupData;
++extern LLVMJIT_EXPORT LLVMTypeRef StructPlanState;
+ 
+-extern PGDLLIMPORT LLVMValueRef AttributeTemplate;
+-extern PGDLLIMPORT LLVMValueRef ExecEvalBoolSubroutineTemplate;
+-extern PGDLLIMPORT LLVMValueRef ExecEvalSubroutineTemplate;
++extern LLVMJIT_EXPORT LLVMValueRef AttributeTemplate;
++extern LLVMJIT_EXPORT LLVMValueRef ExecEvalBoolSubroutineTemplate;
++extern LLVMJIT_EXPORT LLVMValueRef ExecEvalSubroutineTemplate;
+ 
+ 
+ extern void llvm_enter_fatal_on_oom(void);
+--- a/src/backend/jit/llvm/meson.build
++++ b/src/backend/jit/llvm/meson.build
+@@ -33,7 +33,8 @@
+   llvmjit_sources,
+   kwargs: pg_mod_args + {
+     'dependencies': pg_mod_args['dependencies'] + [llvm],
+-    'cpp_args': pg_mod_args['cpp_args'] + llvm.get_variable(configtool: 'cxxflags').split() + cxxflags_no_shadow,
++    'c_args': pg_mod_args['c_args'] + ['-DBUILDING_LLVMJIT'],
++    'cpp_args': pg_mod_args['cpp_args'] + llvm.get_variable(configtool: 'cxxflags').split() + cxxflags_no_shadow + ['-DBUILDING_LLVMJIT'],
+   }
+ )
+ 

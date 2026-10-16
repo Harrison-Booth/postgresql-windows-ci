@@ -1,0 +1,30 @@
+--- a/src/backend/jit/llvm/meson.build
++++ b/src/backend/jit/llvm/meson.build
+@@ -74,6 +74,15 @@
+ bitcode_cflags += cppflags
+ 
+ 
++# Figure out -I's needed to build all postgres code, including all its
++# dependencies
++pkg_config = find_program(['pkg-config', 'pkgconf'], required: true)
++r = run_command(pkg_config,
++  ['--cflags-only-I', meson.project_build_root() / 'meson-uninstalled/postgresql-@0@-extension-uninstalled.pc'.format(pg_version_major)],
++  check: true)
++bitcode_cflags += r.stdout().split()
++
++
+ # Note this is intentionally not installed to bitcodedir, as it's not for
+ # inlining
+ llvmjit_types = custom_target('llvmjit_types.bc',
+@@ -86,11 +95,3 @@
+   depfile: '@BASENAME@.c.bc.d',
+ )
+ backend_targets += llvmjit_types
+-
+-# Figure out -I's needed to build all postgres code, including all its
+-# dependencies
+-pkg_config = find_program(['pkg-config', 'pkgconf'], required: true)
+-r = run_command(pkg_config,
+-  ['--cflags-only-I', meson.project_build_root() / 'meson-uninstalled/postgresql-@0@-extension-uninstalled.pc'.format(pg_version_major)],
+-  check: true)
+-bitcode_cflags += r.stdout().split()

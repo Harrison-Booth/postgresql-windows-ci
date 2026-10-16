@@ -55,9 +55,10 @@ cmake "${llvm_cmake_args[@]}" "-DLLVM_DYLIB_COMPONENTS=$llvm_components"
 python tracker/tools/verify-hosted-llvm-visibility.py configuration \
   --toolchain-root "$(cygpath -m /ucrt64)" --evidence evidence --build llvm-build
 # Prove the actual DLL/export boundary before paying for the Clang tool build.
-ninja -C llvm-build -j 2 LLVM
+ninja -C llvm-build -j 2 LLVM llvm-config
 python tracker/tools/verify-hosted-llvm-dll.py dll --build llvm-build --evidence evidence
-ninja -C llvm-build -j 2 clang llvm-config llvm-as llvm-dis opt llc llvm-lto
+python tracker/tools/verify-hosted-llvm-cxx-probe.py --toolchain-root "$(cygpath -m /ucrt64)"
+ninja -C llvm-build -j 2 clang llvm-as llvm-dis opt llc llvm-lto
 clang --version > evidence/clang-version.txt
 llvm-config --version > evidence/llvm-version.txt
 cat > evidence/native.ini <<EOF
@@ -76,6 +77,7 @@ meson setup postgres/build postgres --native-file evidence/native.ini \
   -Dplperl=disabled -Dplpython=disabled -Dpltcl=disabled -Dtap_tests=disabled \
   -DPERL=C:/Strawberry/perl/bin/perl.exe -DTAR=C:/Windows/System32/tar.exe
 python tracker/tools/verify-hosted-pg-assertions.py configuration
+python tracker/tools/verify-hosted-jit-build-plan.py
 python tracker/tools/run-hosted-llvm-jumps.py
 ninja -C postgres/build -j 2
 meson install -C postgres/build --no-rebuild
