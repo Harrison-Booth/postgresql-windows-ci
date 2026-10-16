@@ -74,7 +74,7 @@
    kwargs: pg_mod_args + {
      'dependencies': pg_mod_args['dependencies'] + [llvm],
 -    'cpp_args': pg_mod_args['cpp_args'] + llvm.get_variable(configtool: 'cxxflags').split() + cxxflags_no_shadow,
-+    'c_args': pg_mod_args['c_args'] + ['-DBUILDING_LLVMJIT'],
++    'c_args': pg_mod_args.get('c_args', []) + ['-DBUILDING_LLVMJIT'],
 +    'cpp_args': pg_mod_args['cpp_args'] + llvm.get_variable(configtool: 'cxxflags').split() + cxxflags_no_shadow + ['-DBUILDING_LLVMJIT'],
    }
  )
