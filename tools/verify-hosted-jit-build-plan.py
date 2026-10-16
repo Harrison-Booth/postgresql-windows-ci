@@ -2,6 +2,7 @@
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 
@@ -101,6 +102,17 @@ def inspect_plan(commands, targets, workspace):
             'command_evidence': 'Meson structured configured argv; Ninja recipes retained separately, wrappers not decoded'}
 
 
+def inspect_provider_link_command(commands):
+    pattern = r'(?:^|\s)-o\s+"?src[/\\]backend[/\\]jit[/\\]llvm[/\\]llvmjit\.dll"?(?:\s|$)'
+    lines = [line for line in commands.splitlines() if re.search(pattern, line)]
+    if len(lines) != 1:
+        raise ValueError('Expected exactly one actual provider link command')
+    line = lines[0]
+    if '--disable-auto-import' not in line or line.rfind('--enable-auto-import') < line.rfind('--disable-auto-import'):
+        raise ValueError('Provider data auto-import must override the global disable')
+    return line
+
+
 def main():
     if os.name != 'nt' or os.environ.get('GITHUB_ACTIONS') != 'true' or os.environ.get('RUNNER_ENVIRONMENT') != 'github-hosted':
         raise SystemExit('GitHub-hosted Windows only')
@@ -118,6 +130,12 @@ def main():
         receipt.update(inspect_plan(proc.stdout.decode('utf-8'), json.loads(intro.read_text()), workspace))
         receipt['commands_sha256'] = hashlib.sha256(proc.stdout).hexdigest()
         receipt['targets_sha256'] = hashlib.sha256(intro.read_bytes()).hexdigest()
+        provider = subprocess.run(['ninja', '-C', str(build), '-t', 'commands',
+                                   'src/backend/jit/llvm/llvmjit.dll'],
+                                  capture_output=True, timeout=60, check=True)
+        (evidence / 'jit-provider-ninja-commands.txt').write_bytes(provider.stdout)
+        receipt['provider_link_command'] = inspect_provider_link_command(provider.stdout.decode('utf-8'))
+        receipt['provider_commands_sha256'] = hashlib.sha256(provider.stdout).hexdigest()
         receipt['status'] = 'verified-preconditions-only'
     except Exception as exc:
         receipt['error'] = repr(exc)

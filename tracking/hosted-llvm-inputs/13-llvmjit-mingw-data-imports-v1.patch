@@ -1,0 +1,24 @@
+diff --git a/src/backend/jit/llvm/meson.build b/src/backend/jit/llvm/meson.build
+--- a/src/backend/jit/llvm/meson.build
++++ b/src/backend/jit/llvm/meson.build
+@@ -29,10 +29,19 @@
+     '--FILEDESC', 'llvmjit - JIT using LLVM',])
+ endif
+ 
++# MinGW LLVM headers use visibility annotations rather than dllimport for
++# public C++ classes. Their exported vtables need data auto-import, as with
++# readline. Keep the original dependency for its config-tool variables.
++llvmjit_llvm = llvm
++if host_system == 'windows' and cc.get_id() in ['gcc', 'clang']
++  llvmjit_llvm = declare_dependency(dependencies: llvm,
++    link_args: '-Wl,--enable-auto-import')
++endif
++
+ llvmjit = shared_module('llvmjit',
+   llvmjit_sources,
+   kwargs: pg_mod_args + {
+-    'dependencies': pg_mod_args['dependencies'] + [llvm],
++    'dependencies': pg_mod_args['dependencies'] + [llvmjit_llvm],
+     'c_args': pg_mod_args.get('c_args', []) + ['-DBUILDING_LLVMJIT'],
+     'cpp_args': pg_mod_args['cpp_args'] + llvm.get_variable(configtool: 'cxxflags').split() + cxxflags_no_shadow + ['-DBUILDING_LLVMJIT'],
+   }

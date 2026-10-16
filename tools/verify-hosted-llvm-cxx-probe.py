@@ -11,6 +11,8 @@ import subprocess
 SOURCE = r'''#define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/LLVMContext.h"
 #include <cassert>
 #include <cstdint>
 #include <cstdio>
@@ -32,6 +34,9 @@ template <class T> void check() {
 int main(int argc, char **argv) {
   if (argc != 2) return 2;
   check<int>(); check<char>();
+  llvm::LLVMContext Context;
+  llvm::IRBuilder<> Builder(Context);
+  assert(Builder.getInt32(42)->getZExtValue() == 42);
   HMODULE H = GetModuleHandleA(argv[1]);
   if (!H) return 3;
   wchar_t P[32768];
@@ -78,8 +83,9 @@ def main():
                    tracker_revision=os.environ.get('GITHUB_SHA'), commands=[],
                    scope='Early real shared LLVM C++ boundary only; full PostgreSQL/JIT/regressions remain required')
 
-    def run(label, argv, timeout=30, env=None):
-        entry = dict(label=label, argv=[str(a) for a in argv], timeout_seconds=timeout)
+    def run(label, argv, timeout=30, env=None, expected_exit=0):
+        entry = dict(label=label, argv=[str(a) for a in argv], timeout_seconds=timeout,
+                     expected_exit=expected_exit)
         receipt['commands'].append(entry)
         log = record_dir / (label + '.log')
         child = None
@@ -109,7 +115,7 @@ def main():
                     except subprocess.TimeoutExpired:
                         entry['controller_exit_still_pending'] = True
                     raise RuntimeError('Exact owned probe command exceeded deadline: ' + label)
-            if entry['exit_code'] != 0:
+            if entry['exit_code'] != expected_exit:
                 raise RuntimeError('Actual command failed: ' + label)
             return log.read_text(encoding='utf-8').strip()
         except Exception as error:
@@ -136,6 +142,9 @@ def main():
         receipt['input_provenance'] = dict(path=str(provenance), sha256=digest(provenance))
         receipt['source_headers'] = [dict(path=str(p), sha256=digest(p)) for p in [
             source / 'llvm/include/llvm/ADT/SmallVector.h',
+            source / 'llvm/include/llvm/IR/IRBuilder.h',
+            source / 'llvm/include/llvm/IR/IRBuilderFolder.h',
+            source / 'llvm/include/llvm/IR/ConstantFolder.h',
             source / 'llvm/include/llvm/Support/Compiler.h',
             build / 'include/llvm/Config/llvm-config.h']]
         receipt['primitive_helper'] = dict(path=str(helper), sha256=digest(helper))
@@ -179,6 +188,11 @@ def main():
                 receipt['required_template_exports'] = families
                 raise RuntimeError('Actual DLL lacks required explicit-template member exports')
         receipt['required_template_exports'] = families
+        vtables = ['_ZTVN4llvm15IRBuilderFolderE', '_ZTVN4llvm14ConstantFolderE',
+                   '_ZTVN4llvm24IRBuilderDefaultInserterE']
+        if not all(name in dll_meta['exports'] for name in vtables):
+            raise RuntimeError('Actual DLL lacks an IRBuilder vtable required by the consumer')
+        receipt['required_vtable_exports'] = vtables
         receipt['shared_DLL'] = dict(path=str(dll), sha256=digest(dll))
         receipt['shared_import_library'] = dict(path=str(implib), sha256=digest(implib))
         cpp = work / 'probe.cpp'
@@ -190,7 +204,18 @@ def main():
                         '-I' + str(build / 'include'), '-O0', '-fno-inline', '-UNDEBUG',
                         '-c', cpp, '-o', obj]
         run('compile', compile_argv, timeout=120)
-        run('link', [gxx, obj, *ldflags, implib, '-o', exe], timeout=120)
+        link_argv = [gxx, obj, *ldflags, implib, '-Wl,--disable-auto-import']
+        negative = run('link-auto-import-disabled',
+                       [*link_argv, '-o', work / 'probe-disabled.exe'],
+                       timeout=120, expected_exit=1)
+        classes = ['IRBuilderFolder', 'ConstantFolder', 'IRBuilderDefaultInserter']
+        if not all('vtable for llvm::' + name in negative for name in classes):
+            raise RuntimeError('Disabled-import control failed for a different reason')
+        run('link', [*link_argv, '-Wl,--enable-auto-import', '-o', exe], timeout=120)
+        receipt['IRBuilder_auto_import_controls'] = {
+            'disabled_import_exit': 1, 'three_exported_vtables_unresolved': True,
+            'enabled_import_link_exit': 0,
+            'scope': 'Same object and actual shared LLVM import library; only data-import policy changes'}
         executable = pe(exe)
         if dll.name.lower() not in [name.lower() for name in executable['imports']]:
             raise RuntimeError('Probe PE does not import the exact LLVM DLL name')
@@ -210,7 +235,7 @@ def main():
         if digest(dll) != dll_check['dll_sha256'] or digest(implib) != dll_check['import_library_sha256']:
             raise RuntimeError('DLL/import library changed during consumer probe')
         receipt['loaded_DLL'] = dict(path=str(loaded), sha256=digest(loaded))
-        receipt['status'] = 'passed-real-GCC-O0-shared-LLVM-template-probe'
+        receipt['status'] = 'passed-real-GCC-O0-shared-LLVM-template-and-IRBuilder-probe'
     except Exception as error:
         receipt['error'] = repr(error)
         raise

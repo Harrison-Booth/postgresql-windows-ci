@@ -62,14 +62,19 @@
       "file": "12-types-bitcode-platform-includes-v1.patch",
       "sha256": "61321c9c87edaa1ae977e2c41f297c2fb78d097faf61684afe16de7e18bb14f0",
       "role": "Private include-order correction; no runtime or publication approval."
+    },
+    {
+      "file": "13-llvmjit-mingw-data-imports-v1.patch",
+      "sha256": "420861a4522264614de76d3a10dadf9b2d8c4f040608a5d1ef1bbea51815d4d1",
+      "role": "Experimental provider-only GNU Windows LLVM data-import correction, runtime unverified"
     }
   ],
   "controls": {
     "main.c": "e6a625a5f6c4923d44b8ba31e059a9c7b5a929756ad9a44758145187b73767a3",
     "jump.c": "0e6cef624a77dbe32de1b0794d793805d9b860f2a81eeebac81d6399a3d52850"
   },
-  "status": "packaged-not-hosted-tested",
-  "scope": "Ordered reconstruction inputs for full Windows MinGW x64 JIT verification. Not an approved submission. No LLVM ARM64 claim. All four GCC/Clang caller/callee combinations must pass before full server JIT SQL testing. Prior stock-Clang failure evidence remains authoritative. Input10 restores BUILDING_DLL only for backend bitcode, matching native backend_code; extension modules retain their own import semantics. Ten-input runtime unverified. Prior nine-input full build failed in AIO bitcode. Candidate revision2 adds two PostgreSQL corrections and one separate LLVM patch. All previous10 PostgreSQL patches and both source pins unchanged. New13input reconstruction is untested, unpublished and unapproved. Revision3 corrects the optional pg_mod_args c_args lookup exposed by run38940376982. Eight configuration-only cases pass on Meson1.11.2/0.57.2; full PostgreSQL runtime remains unverified. No change to either source pin or the other12 source patch inputs.",
+  "status": "public-CI-candidate-runtime-unverified",
+  "scope": "Exact pinned reconstruction:13PostgreSQL patches plus1LLVM patch. Prior12PostgreSQL inputs, LLVM patch and both source pins unchanged. Provider-only import correction follows actual run38951128866 link failure; real IRBuilder disabled-import negative and enabled-import positive controls precede full PostgreSQL work. Full sharedDLL/consumer, four1000jump combinations, debug+cassert server SSL/ICU build/install, provider imports, JITSQL/same-backend error recovery, three setup groups and full default/forced-JIT core regressions remain mandatory. No LLVM ARM64 or upstream submission approval claimed.",
   "llvm_series": [
     {
       "file": "llvm-01-smallvector-template-exports-v1.patch",
