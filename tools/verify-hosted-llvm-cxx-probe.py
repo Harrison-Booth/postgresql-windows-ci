@@ -147,8 +147,7 @@ def main():
             raise RuntimeError('Expected native x64 GNU MinGW consumer')
         cxxflags = shlex.split(run('llvm-config-cxxflags', [config, '--quote-paths', '--cxxflags']), posix=True)
         ldflags = shlex.split(run('llvm-config-ldflags', [config, '--quote-paths', '--ldflags']), posix=True)
-        libs = shlex.split(run('llvm-config-shared-libs', [config, '--quote-paths', '--link-shared', '--libs', 'support']), posix=True)
-        systemlibs = shlex.split(run('llvm-config-system-libs', [config, '--quote-paths', '--link-shared', '--system-libs']), posix=True)
+        libdirs = shlex.split(run('llvm-config-libdir', [config, '--quote-paths', '--libdir']), posix=True)
         if any('LLVM_BUILD_STATIC' in f for f in cxxflags):
             raise RuntimeError('Static consumer flag is forbidden')
         dll_check = json.loads((evidence / 'llvm-dll-verification.json').read_bytes())
@@ -158,9 +157,13 @@ def main():
         implib = owned(dll_check['import_library'], build)
         if digest(dll) != dll_check['dll_sha256'] or digest(implib) != dll_check['import_library_sha256']:
             raise RuntimeError('Actual DLL/import library changed after export gate')
-        expected_lib = '-l' + dll.name.removeprefix('lib').removesuffix('.dll')
-        if libs != [expected_lib] or not str(implib).lower().endswith('.dll.a'):
-            raise RuntimeError('llvm-config did not select the actual shared import library')
+        # LLVM_LINK_LLVM_DYLIB=OFF permits static component linkage for tools.
+        # --link-shared changes component mode, not that monolithic selection.
+        # Use real directory metadata and the separately verified shared import
+        # library, without requesting nonexistent per-component shared DLLs.
+        if len(libdirs) != 1 or owned(libdirs[0], build) != implib.parent or not str(implib).lower().endswith('.dll.a'):
+            raise RuntimeError('Actual shared import library disagrees with llvm-config libdir')
+        receipt['llvm_config_library_directory'] = libdirs[0]
         dll_meta = pe(dll)
         families = {}
         for code in ['j', 'y']:
@@ -187,7 +190,7 @@ def main():
                         '-I' + str(build / 'include'), '-O0', '-fno-inline', '-UNDEBUG',
                         '-c', cpp, '-o', obj]
         run('compile', compile_argv, timeout=120)
-        run('link', [gxx, obj, *ldflags, implib, *systemlibs, '-o', exe], timeout=120)
+        run('link', [gxx, obj, *ldflags, implib, '-o', exe], timeout=120)
         executable = pe(exe)
         if dll.name.lower() not in [name.lower() for name in executable['imports']]:
             raise RuntimeError('Probe PE does not import the exact LLVM DLL name')
