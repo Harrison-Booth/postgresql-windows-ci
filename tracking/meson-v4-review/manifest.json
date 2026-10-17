@@ -1,0 +1,14 @@
+{
+  "source_base": "7787aec8ab000932a8704a988b175b39ff816f2f",
+  "inputs": [
+    {
+      "file": "author-v4.patch",
+      "sha256": "80d08b863671adea7b28246ddfeee52f6889f366e102b6d8f8cd18ce4e41d598"
+    },
+    {
+      "file": "focused-order-and-probes.patch",
+      "sha256": "7c71aefd4dd3d8f8e6702947feeae58d51c788111ea0f731a505a15d797666ec"
+    }
+  ],
+  "scope": "Exact public author v4 plus focused include-order/fallback-probe supplement; diagnostic test, not an email approval"
+}

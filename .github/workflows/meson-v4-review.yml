@@ -1,0 +1,49 @@
+name: CF7300 v4 independent Windows review
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: meson-v4-review
+  cancel-in-progress: false
+jobs:
+  review:
+    if: ${{ github.repository == 'Harrison-Booth/postgresql-windows-ci' && !github.event.repository.private }}
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - runner: windows-2022
+            arch: x64
+          - runner: windows-11-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          path: ci
+          persist-credentials: false
+      - uses: actions/checkout@v6
+        with:
+          repository: postgres/postgres
+          ref: 7787aec8ab000932a8704a988b175b39ff816f2f
+          path: postgres
+          persist-credentials: false
+          fetch-depth: 1
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+          architecture: ${{ matrix.arch }}
+      - name: Run exact author export controls and focused include-order comparison
+        shell: pwsh
+        run: ./ci/tools/meson-v4-review.ps1 -Architecture '${{ matrix.arch }}'
+      - name: Preserve all results including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: meson-v4-review-${{ matrix.arch }}-${{ github.run_attempt }}
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 7
