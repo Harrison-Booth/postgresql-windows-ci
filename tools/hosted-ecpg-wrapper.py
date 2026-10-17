@@ -12,6 +12,17 @@ def call(args,name,timeout=600,cwd=source):
  if p.returncode:raise RuntimeError(name+' failed, inspect preserved log')
  return (e/(name+'.log')).read_text(errors='replace')
 assert subprocess.check_output(['git','rev-parse','HEAD'],cwd=source,text=True).strip()==base
+if '--prepare-native-zic' in sys.argv:
+ assert not subprocess.check_output(['git','status','--porcelain'],cwd=source,text=True).strip()
+ native=root/'native-tools'
+ call(['meson','setup',str(native),str(source),'-Dauto_features=disabled','-Dssl=none','-Dicu=disabled','-Dtap_tests=disabled'],'native-zic-setup')
+ call(['meson','compile','-C',str(native),'zic','-j2'],'native-zic-build')
+ data=(native/'src/timezone/zic.exe').read_bytes();offset=struct.unpack_from('<I',data,0x3c)[0];assert data[offset:offset+4]==b'PE\0\0'
+ machine=struct.unpack_from('<H',data,offset+4)[0];assert machine=={'x64':0x8664,'arm64':0xaa64}[host_arch]
+ (e/'native-zic.json').write_text(json.dumps({'host_architecture':host_arch,'machine':hex(machine),'sha256':hashlib.sha256(data).hexdigest(),'source_base':base},indent=2)+'\n')
+ raise SystemExit(0)
+native_config=root/'native-zic.ini';zic=root/'native-tools/src/timezone/zic.exe';assert zic.is_file()
+native_config.write_text("[binaries]\nzic = '"+zic.as_posix()+"'\n")
 inputs=[
  ('https://www.postgresql.org/message-id/attachment/206105/v2-0001-Fix-races-in-Windows-pthread-mutex-initialization.patch','8198f605a25cfb99a324cec6d057f1064f8e79aa46ce7d2d128f9a95840706e0'),
  ('https://www.postgresql.org/message-id/attachment/206106/v3-0001-Fix-pg_basebackup-long-path-test-on-Windows.patch','8ba40c250ea208a8e8738b38321336177a16a1c087aff3380db6c98ecc869c38'),
@@ -25,7 +36,7 @@ wrapper.write_text("import json,pathlib,subprocess,sys\np=pathlib.Path(__file__)
 cross=root/'cross-required.ini'
 cross.write_text("[binaries]\nc = 'cl'\ncpp = 'cl'\nar = 'lib'\nexe_wrapper = "+repr([sys.executable.replace('\\','/'),wrapper.as_posix()])+"\n[host_machine]\nsystem = 'windows'\ncpu_family = 'x86_64'\ncpu = 'x86_64'\nendian = 'little'\n[properties]\nneeds_exe_wrapper = true\n")
 missing=root/'cross-missing.ini';missing.write_text('\n'.join(x for x in cross.read_text().splitlines() if not x.startswith('exe_wrapper ='))+'\n')
-common=['-Dauto_features=disabled','-Dtap_tests=enabled','-Dcassert=true','-DPERL=C:/Strawberry/perl/bin/perl.exe','-DTAR=C:/Windows/System32/tar.exe']
+common=['--native-file',str(native_config),'-Dauto_features=disabled','-Dtap_tests=enabled','-Dcassert=true','-DPERL=C:/Strawberry/perl/bin/perl.exe','-DTAR=C:/Windows/System32/tar.exe']
 negative=root/'build-no-wrapper';call(['meson','setup',str(negative),str(source),'--cross-file',str(missing),*common],'missing-wrapper-setup')
 targets=json.loads(call(['meson','introspect','--targets',str(negative)],'missing-wrapper-targets'))
 assert not any('/ecpg/test/' in str(t.get('defined_in','')).replace('\\','/') for t in targets),targets

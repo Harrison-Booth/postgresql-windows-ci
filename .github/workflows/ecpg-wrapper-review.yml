@@ -53,3 +53,5 @@ jobs:
             build-no-wrapper/meson-logs/
             cross-required.ini
             cross-missing.ini
+            native-zic.ini
+            native-tools/meson-logs/

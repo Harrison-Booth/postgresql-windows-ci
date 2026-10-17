@@ -11,7 +11,7 @@ try {
  $vs=& $vswhere -latest -products '*' -property installationPath
  if($LASTEXITCODE -ne 0 -or -not $vs){throw 'Visual Studio unavailable'}
  Import-Module (Join-Path $vs 'Common7/Tools/Microsoft.VisualStudio.DevShell.dll')
- Enter-VsDevShell -VsInstallPath $vs -SkipAutomaticLocation -DevCmdArguments "-arch=x64 -host_arch=$taskHostArch"
+ Enter-VsDevShell -VsInstallPath $vs -SkipAutomaticLocation -DevCmdArguments "-arch=$taskHostArch -host_arch=$taskHostArch"
  $archive=Join-Path $env:RUNNER_TEMP 'ecpg-winflex.zip'
  $flex=Join-Path $env:RUNNER_TEMP 'ecpg-winflex'
  Invoke-WebRequest 'https://github.com/lexxmark/winflexbison/releases/download/v2.5.25/win_flex_bison-2.5.25.zip' -OutFile $archive
@@ -22,6 +22,9 @@ try {
  if($LASTEXITCODE -ne 0){throw 'Build tools installation failed'}
  & C:/Strawberry/perl/bin/perl.exe -MIPC::Run -e 1
  if($LASTEXITCODE -ne 0){throw 'IPC::Run unavailable'}
+ python ci/tools/hosted-ecpg-wrapper.py --prepare-native-zic
+ if($LASTEXITCODE -ne 0){throw 'Native zic prerequisite failed'}
+ Enter-VsDevShell -VsInstallPath $vs -SkipAutomaticLocation -DevCmdArguments "-arch=x64 -host_arch=$taskHostArch"
  python ci/tools/hosted-ecpg-wrapper.py
  if($LASTEXITCODE -ne 0){throw 'ECPG wrapper control failed'}
 }finally{Stop-Transcript}
