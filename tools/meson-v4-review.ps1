@@ -37,16 +37,22 @@ try {
  }
  & git -C (Join-Path $taskWorkspace 'postgres') apply (Join-Path $taskInput 'author-v4.patch')
  if ($LASTEXITCODE -ne 0) {throw 'Exact author v4 application failed'}
+ $taskFixtureFailures=@()
  foreach ($taskVersion in @('0.57.2','1.11.2')) {
   $taskToolRoot=Join-Path $taskDeps "meson-$taskVersion"
   & python -m pip install "meson==$taskVersion" --target $taskToolRoot
   if ($LASTEXITCODE -ne 0) {throw "Meson $taskVersion installation failed"}
   $taskLauncher=Join-Path $taskDeps "meson-$taskVersion.py"
   "import sys; sys.path.insert(0, r'$taskToolRoot'); from mesonbuild.mesonmain import main; raise SystemExit(main())" | Set-Content -LiteralPath $taskLauncher -Encoding utf8
-  & python (Join-Path $PSScriptRoot 'test-author-v4.py') --source (Join-Path $taskWorkspace 'postgres') --meson $taskLauncher --pkgconfig $taskPkg --output (Join-Path $taskEvidence "export-$taskVersion") --native
-  if ($LASTEXITCODE -ne 0) {throw "Export configuration fixture failed under Meson $taskVersion; preserve logs"}
+  foreach ($taskVariant in @('author','cmake-list-fix')) {
+   $taskExtra=@()
+   if ($taskVariant -eq 'cmake-list-fix') {$taskExtra=@('--cmake-list-fix')}
+   & python (Join-Path $PSScriptRoot 'test-author-v4.py') --source (Join-Path $taskWorkspace 'postgres') --meson $taskLauncher --pkgconfig $taskPkg --output (Join-Path $taskEvidence "export-$taskVersion-$taskVariant") --native @taskExtra
+   if ($LASTEXITCODE -ne 0) {$taskFixtureFailures += "$taskVersion/$taskVariant"}
+  }
  }
  & python (Join-Path $PSScriptRoot 'test-author-v4-pg-build.py') --workspace $taskWorkspace --architecture $Architecture --meson (Join-Path $taskDeps 'meson-1.11.2.py')
  if ($LASTEXITCODE -ne 0) {throw 'Actual PostgreSQL include-order comparison failed its expected controls'}
+ if ($taskFixtureFailures.Count -ne 0) {throw "Unexpected configuration/control failures: $($taskFixtureFailures -join ', ')"}
  @{run_id=$env:GITHUB_RUN_ID;revision=$env:GITHUB_SHA;architecture=$Architecture;scope='Diagnostic exact author-v4 export matrix plus actual PostgreSQL author/focused include-order builds. Green means controls ran; individual v4 macro/header failures must be inspected. No full server/PGXS/SSL/ICU runtime claim.'} | ConvertTo-Json | Set-Content (Join-Path $taskEvidence 'completion.json')
 } finally {Stop-Transcript}
