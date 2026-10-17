@@ -1,0 +1,47 @@
+name: Current master native fopen API and TAP
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: current-fopen-readiness
+  cancel-in-progress: false
+jobs:
+  frontend:
+    if: ${{ github.repository == 'Harrison-Booth/postgresql-windows-ci' && !github.event.repository.private }}
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - runner: windows-2022
+            arch: x64
+          - runner: windows-11-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          path: ci
+          persist-credentials: false
+      - uses: actions/checkout@v6
+        with:
+          repository: postgres/postgres
+          ref: 45fc51fcbf4534ea2f6f85e36f8155dbd5ba9851
+          path: postgres
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+          architecture: ${{ matrix.arch }}
+      - name: Build only frontend helper and run API and registered TAP checks
+        shell: pwsh
+        run: ./ci/tools/current-fopen-review.ps1 -Architecture '${{ matrix.arch }}'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: current-fopen-${{ matrix.arch }}
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 7
