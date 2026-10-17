@@ -15,7 +15,7 @@ try {
  $taskDeps=Join-Path $env:RUNNER_TEMP 'meson-v4-review-dependencies'
  New-Item -ItemType Directory -Path $taskDeps | Out-Null
  $taskPkgArchive=Join-Path $taskDeps 'pkgconf.pkg.tar.zst'
- Invoke-WebRequest -Uri 'https://mirror.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-pkgconf-1~3.0.7-2-any.pkg.tar.zst' -OutFile $taskPkgArchive
+ Invoke-WebRequest -Uri 'https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-pkgconf-1~3.0.7-2-any.pkg.tar.zst' -OutFile $taskPkgArchive
  if ((Get-FileHash -LiteralPath $taskPkgArchive).Hash -ne '754CEB500A1289DC78BFD45E26E2098414D1DCCF817ABDC4B9537693F8595AC0') {throw 'pkgconf archive hash differs'}
  & tar -xf $taskPkgArchive -C $taskDeps
  if ($LASTEXITCODE -ne 0) {throw 'pkgconf extraction failed'}
