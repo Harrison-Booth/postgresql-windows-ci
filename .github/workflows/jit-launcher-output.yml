@@ -1,0 +1,26 @@
+name: Windows inherited-output launcher control
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  diagnostic:
+    if: ${{ github.repository == 'Harrison-Booth/postgresql-windows-ci' && !github.event.repository.private }}
+    runs-on: windows-2022
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          path: ci
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - run: python ci/tools/test-jit-launcher-output.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: launcher-output-control
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 7
