@@ -14,7 +14,7 @@ assert hashlib.sha256(patch.read_bytes()).hexdigest()==x['sha256']
 assert subprocess.check_output(['git','rev-parse','HEAD'],cwd=source,text=True).strip()==m['upstream_base']
 call(['git','-C',str(source),'-c','user.name=PostgreSQL CI','-c','user.email=ci@example.invalid','am',str(patch)],'mail-application')
 build=root/'frontend-build'
-call(['meson','setup',str(build),str(source),'-Dauto_features=disabled','-Dtap_tests=enabled','-Dssl=disabled','-Dicu=disabled'],'setup')
+call(['meson','setup',str(build),str(source),'-Dauto_features=disabled','-Dtap_tests=enabled','-Dssl=none','-Dicu=disabled'],'setup')
 call(['meson','compile','-C',str(build),'test_fopen','-j2'],'compile',600)
 exe=build/'src/test/modules/test_pgport/test_fopen.exe'
 data=exe.read_bytes();offset=struct.unpack_from('<I',data,0x3c)[0];assert data[offset:offset+4]==b'PE\0\0'
