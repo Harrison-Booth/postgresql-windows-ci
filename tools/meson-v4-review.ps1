@@ -44,9 +44,10 @@ try {
   if ($LASTEXITCODE -ne 0) {throw "Meson $taskVersion installation failed"}
   $taskLauncher=Join-Path $taskDeps "meson-$taskVersion.py"
   "import sys; sys.path.insert(0, r'$taskToolRoot'); from mesonbuild.mesonmain import main; raise SystemExit(main())" | Set-Content -LiteralPath $taskLauncher -Encoding utf8
-  foreach ($taskVariant in @('author','cmake-list-fix')) {
+  foreach ($taskVariant in @('author','cmake-list-fix','cmake-list-and-space-fix')) {
    $taskExtra=@()
    if ($taskVariant -eq 'cmake-list-fix') {$taskExtra=@('--cmake-list-fix')}
+   if ($taskVariant -eq 'cmake-list-and-space-fix') {$taskExtra=@('--cmake-list-fix','--cmake-space-fix')}
    & python (Join-Path $PSScriptRoot 'test-author-v4.py') --source (Join-Path $taskWorkspace 'postgres') --meson $taskLauncher --pkgconfig $taskPkg --output (Join-Path $taskEvidence "export-$taskVersion-$taskVariant") --native @taskExtra
    if ($LASTEXITCODE -ne 0) {$taskFixtureFailures += "$taskVersion/$taskVariant"}
   }

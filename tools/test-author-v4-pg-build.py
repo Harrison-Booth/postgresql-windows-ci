@@ -12,7 +12,7 @@ def main():
  records=[]
  for name,path in [('author-v4',source),('author-v4-plus-focused',candidate)]:
   build=w/('pg-build-'+name)
-  setup=[sys.executable,str(a.meson),'setup',str(build),str(path),'-Dauto_features=disabled','-Dssl=disabled','-Dicu=disabled','-Dtap_tests=disabled','-Dextra_include_dirs='+str(canary)]
+  setup=[sys.executable,str(a.meson),'setup',str(build),str(path),'-Dauto_features=disabled','-Dssl=none','-Dicu=disabled','-Dtap_tests=disabled','-Dextra_include_dirs='+str(canary)]
   proc=subprocess.run(setup,capture_output=True,timeout=300)
   (out/(name+'-setup.log')).write_bytes(proc.stdout+proc.stderr)
   row={'revision':name,'setup_exit':proc.returncode,'architecture':a.architecture}
