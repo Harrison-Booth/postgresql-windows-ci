@@ -17,11 +17,23 @@ proof=dict(status='running',scope='Installed LLVM-enabled native x64 server: for
 dest=Path('evidence/jit-runtime.json')
 def save():dest.write_text(json.dumps(proof,indent=2)+'\n')
 def run(name,command,expect=0):
-    p=subprocess.run(command,env=env,capture_output=True,text=True,timeout=120)
-    Path('evidence',name+'.log').write_text(p.stdout+p.stderr)
-    proof['cases'].append(dict(name=name,command=command,exit=p.returncode));save()
-    assert p.returncode==expect,(name,p.returncode,p.stderr)
-    return p.stdout
+    stdout_path=Path('evidence',name+'.stdout.log')
+    stderr_path=Path('evidence',name+'.stderr.log')
+    row=dict(name=name,command=command,status='running')
+    proof['cases'].append(row);save()
+    try:
+        with stdout_path.open('wb') as stdout, stderr_path.open('wb') as stderr:
+            p=subprocess.run(command,env=env,stdin=subprocess.DEVNULL,stdout=stdout,stderr=stderr,timeout=120)
+    except BaseException as error:
+        row['status']='failed';row['error']=str(error);save()
+        Path('evidence',name+'.log').write_bytes(stdout_path.read_bytes()+stderr_path.read_bytes())
+        raise
+    output=stdout_path.read_text(errors='replace')
+    errors=stderr_path.read_text(errors='replace')
+    Path('evidence',name+'.log').write_text(output+errors)
+    row.update(exit=p.returncode,status='completed');save()
+    assert p.returncode==expect,(name,p.returncode,errors)
+    return output
 def sql(name,text,expect=0):
     return run(name,[str(bin/'psql.exe'),'-X','-At','-v','ON_ERROR_STOP=1','-h','127.0.0.1','-p',str(port),'-U','fixture','-d','postgres','-c',text],expect)
 started=False
