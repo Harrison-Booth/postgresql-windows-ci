@@ -1,4 +1,4 @@
-param([Parameter(Mandatory)][ValidateSet('x64','arm64')][string]$Architecture)
+param([Parameter(Mandatory)][ValidateSet('x64','arm64')][string]$Architecture,[switch]$FixturesOnly)
 $ErrorActionPreference='Stop'
 if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_ENVIRONMENT -ne 'github-hosted') {throw 'Standard GitHub-hosted execution required'}
 if ([Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant() -ne $Architecture) {throw 'Native architecture mismatch'}
@@ -52,8 +52,10 @@ try {
    if ($LASTEXITCODE -ne 0) {$taskFixtureFailures += "$taskVersion/$taskVariant"}
   }
  }
+ if (-not $FixturesOnly) {
  & python (Join-Path $PSScriptRoot 'test-author-v4-pg-build.py') --workspace $taskWorkspace --architecture $Architecture --meson (Join-Path $taskDeps 'meson-1.11.2.py')
  if ($LASTEXITCODE -ne 0) {throw 'Actual PostgreSQL include-order comparison failed its expected controls'}
+ }
  if ($taskFixtureFailures.Count -ne 0) {throw "Unexpected configuration/control failures: $($taskFixtureFailures -join ', ')"}
- @{run_id=$env:GITHUB_RUN_ID;revision=$env:GITHUB_SHA;architecture=$Architecture;scope='Diagnostic exact author-v4 export matrix plus actual PostgreSQL author/focused include-order builds. Green means controls ran; individual v4 macro/header failures must be inspected. No full server/PGXS/SSL/ICU runtime claim.'} | ConvertTo-Json | Set-Content (Join-Path $taskEvidence 'completion.json')
+ @{run_id=$env:GITHUB_RUN_ID;revision=$env:GITHUB_SHA;architecture=$Architecture;pg_include_order_skipped=[bool]$FixturesOnly;retained_pg_include_order_run='39065789528';scope='Diagnostic exact author-v4 export matrix. PostgreSQL include-order comparison runs only when FixturesOnly is false; inspect the explicit skip flag. Green means controls ran; individual v4 macro/header failures must be inspected. No full server/PGXS/SSL/ICU runtime claim.'} | ConvertTo-Json | Set-Content (Join-Path $taskEvidence 'completion.json')
 } finally {Stop-Transcript}

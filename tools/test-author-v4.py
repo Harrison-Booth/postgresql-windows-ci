@@ -14,7 +14,8 @@ def main():
   block=block.replace("foreach incdir_raw : incdirs.split(';')", "incdirs_list = []\n      incdirs_list += incdirs\n      foreach incdir_raw : ';'.join(incdirs_list).split(';')")
  if a.cmake_space_fix:
   assert block.count("dep_flags += '-I' + incdir")==1
-  block=block.replace("dep_flags += '-I' + incdir", "dep_flags += '-I' + incdir.replace(' ', '\\\\ ')")
+  block=block.replace("if incdir != '' and '-I' + incdir not in dep_flags", "incflag = '-I' + '\\\\ '.join(incdir.split(' '))\n        if incdir != '' and incflag not in dep_flags")
+  block=block.replace("dep_flags += '-I' + incdir", "dep_flags += incflag")
  include=(a.source/'src/include/meson.build').read_text(encoding='utf-8')
  exports=include[include.index("var_cppflags = ' '.join"):include.index('var_cflags_sl =')]
  expected_sha='80d08b863671adea7b28246ddfeee52f6889f366e102b6d8f8cd18ce4e41d598'

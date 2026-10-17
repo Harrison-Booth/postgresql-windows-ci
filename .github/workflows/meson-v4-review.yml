@@ -1,6 +1,12 @@
 name: CF7300 v4 independent Windows review
 on:
   workflow_dispatch:
+    inputs:
+      fixtures_only:
+        description: Reuse completed PostgreSQL include-order comparison; run export controls only
+        type: boolean
+        default: false
+        required: true
 permissions:
   contents: read
 concurrency:
@@ -38,7 +44,13 @@ jobs:
           architecture: ${{ matrix.arch }}
       - name: Run exact author export controls and focused include-order comparison
         shell: pwsh
-        run: ./ci/tools/meson-v4-review.ps1 -Architecture '${{ matrix.arch }}'
+        env:
+          TEST_ARCH: ${{ matrix.arch }}
+          FIXTURES_ONLY: ${{ inputs.fixtures_only }}
+        run: |
+          $taskArgs=@{Architecture=$env:TEST_ARCH}
+          if($env:FIXTURES_ONLY -eq 'true'){$taskArgs.FixturesOnly=$true}
+          ./ci/tools/meson-v4-review.ps1 @taskArgs
       - name: Preserve all results including failures
         if: always()
         uses: actions/upload-artifact@v4
