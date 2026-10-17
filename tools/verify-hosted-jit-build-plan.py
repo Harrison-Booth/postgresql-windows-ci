@@ -113,6 +113,38 @@ def inspect_provider_link_command(commands):
     return line
 
 
+def inspect_bitcode_index(targets, build):
+    matches = [t for t in targets if t.get('type') == 'custom'
+               and any(str(f).replace('\\', '/').endswith('/postgres.index.bc')
+                       for f in t.get('filename', []))]
+    if len(matches) != 1 or len(matches[0].get('target_sources', [])) != 1:
+        raise ValueError('Expected one complete backend bitcode index target')
+    group = matches[0]['target_sources'][0]
+    argv = group.get('compiler', []) + group.get('parameters', [])
+    if '@INPUT@' in argv or argv.count('--input-list') != 1:
+        raise ValueError('Backend index must use a manifest instead of expanded input argv')
+    manifest = argv[argv.index('--input-list') + 1]
+    manifest = manifest.replace('@BUILD_ROOT@', str(build))
+    path = Path(manifest)
+    if not path.is_absolute():
+        path = build / path
+    path = path.resolve()
+    expected = (build / 'src/backend/jit/llvm/bitcode/postgres.inputs').resolve()
+    if path != expected:
+        raise ValueError('Unexpected backend bitcode input manifest')
+    contents = path.read_bytes()
+    inputs = [Path(line).resolve() for line in contents.decode('utf-8').splitlines()]
+    sources = [Path(line).resolve() for line in group.get('sources', [])]
+    if not inputs or inputs != sources:
+        raise ValueError('Backend manifest does not preserve every ordered bitcode input')
+    length = len(subprocess.list2cmdline(argv))
+    if length >= 30000:
+        raise ValueError('Backend bitcode command still approaches the Windows limit')
+    return {'manifest_sha256': hashlib.sha256(contents).hexdigest(),
+            'input_count': len(inputs), 'configured_command_characters': length,
+            'all_ordered_dependencies_preserved': True}, contents
+
+
 def main():
     if os.name != 'nt' or os.environ.get('GITHUB_ACTIONS') != 'true' or os.environ.get('RUNNER_ENVIRONMENT') != 'github-hosted':
         raise SystemExit('GitHub-hosted Windows only')
@@ -136,6 +168,10 @@ def main():
         (evidence / 'jit-provider-ninja-commands.txt').write_bytes(provider.stdout)
         receipt['provider_link_command'] = inspect_provider_link_command(provider.stdout.decode('utf-8'))
         receipt['provider_commands_sha256'] = hashlib.sha256(provider.stdout).hexdigest()
+        receipt['bitcode_index'], contents = inspect_bitcode_index(json.loads(intro.read_text()), build)
+        if receipt['bitcode_index']['input_count'] != 793:
+            raise ValueError('Pinned backend bitcode input count changed')
+        (evidence / 'postgres-bitcode-index-inputs.txt').write_bytes(contents)
         receipt['status'] = 'verified-preconditions-only'
     except Exception as exc:
         receipt['error'] = repr(exc)

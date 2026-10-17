@@ -67,6 +67,11 @@
       "file": "13-llvmjit-mingw-data-imports-v1.patch",
       "sha256": "420861a4522264614de76d3a10dadf9b2d8c4f040608a5d1ef1bbea51815d4d1",
       "role": "Experimental provider-only GNU Windows LLVM data-import correction, runtime unverified"
+    },
+    {
+      "file": "14-irlink-input-and-LLVM-response-files-v1.patch",
+      "sha256": "1bc7bd506ae58237833cc5aaf48e5e0ed67e7af551f015727281cfbd6bbe9a67",
+      "role": "experimental Windows command-length correction for complete bitcode indexing"
     }
   ],
   "controls": {

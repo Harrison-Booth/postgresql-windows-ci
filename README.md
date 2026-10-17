@@ -13,7 +13,7 @@ This repository excludes email drafts, mailbox exports, private tracking records
 ## Experimental LLVM verification
 
 The manual LLVM workflow reconstructs pinned PostgreSQL and LLVM sources from
-the recorded 13 PostgreSQL patches and one LLVM patch. These are experimental
+the recorded 14 PostgreSQL patches and one LLVM patch. These are experimental
 CI inputs, with no upstream submission approval implied. Public source bytes
 are reviewed separately from private drafts and tracker evidence.
 
@@ -34,3 +34,13 @@ four compiler jump combinations, assertion-enabled SSL/ICU server build and
 install, provider imports, forced-JIT SQL, same-backend error recovery, three
 setup groups, and separate full default and forced-JIT core regressions. The
 candidate has no runtime result until its own hosted run completes.
+
+
+Run 38964400928 passed the provider link and real IRBuilder import controls,
+then stopped at backend bitcode indexing: the 793-input irlink command was
+62,646 characters. Installation, JIT SQL and regressions were not reached.
+The next experimental correction retains every bitcode dependency but uses
+a configured input manifest and an LLVM response file. The build-plan gate
+checks all 793 ordered inputs and bounded command length. Lightweight Python
+and no-language Meson controls pass; real LLVM execution remains unverified
+until the next hosted run completes. The full original test scope is retained.

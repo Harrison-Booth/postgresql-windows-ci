@@ -1,0 +1,82 @@
+diff --git a/src/backend/jit/llvm/bitcode/meson.build b/src/backend/jit/llvm/bitcode/meson.build
+--- a/src/backend/jit/llvm/bitcode/meson.build
++++ b/src/backend/jit/llvm/bitcode/meson.build
+@@ -35,11 +35,23 @@
+     )
+   endforeach
+ 
++  # Keep the complete dependency graph without expanding all bitcode paths
++  # onto the process command line, which can exceed Windows' limit.
++  bitcode_inputs = []
++  foreach bitcode_target : bitcode_targets
++    bitcode_inputs += bitcode_target.full_path()
++  endforeach
++  bitcode_input_list = configure_file(
++    input: 'irlink-inputs.in',
++    output: '@0@.inputs'.format(bitcode_name),
++    configuration: {'INPUTS': '\n'.join(bitcode_inputs)},
++  )
++
+   index_name = '@0@.index.bc'.format(bitcode_name)
+   bitcode_index = custom_target('@0@'.format(bitcode_name),
+     output: index_name,
+     input: bitcode_targets,
+-    command: [irlink, '--lto', llvm_lto, '--outdir', '@OUTDIR@', '--index', index_name, '@INPUT@'],
++    command: [irlink, '--lto', llvm_lto, '--outdir', '@OUTDIR@', '--index', index_name, '--input-list', bitcode_input_list],
+     install: true,
+     install_dir: dir_bitcode,
+   )
+diff --git a/src/tools/irlink b/src/tools/irlink
+--- a/src/tools/irlink
++++ b/src/tools/irlink
+@@ -6,6 +6,7 @@
+ import argparse
+ import os
+ import subprocess
++import tempfile
+ 
+ parser = argparse.ArgumentParser(
+     description='generate PostgreSQL JIT IR module')
+@@ -13,14 +14,31 @@
+ parser.add_argument('--index', type=str, required=True)
+ parser.add_argument('--lto', type=str, required=True)
+ parser.add_argument('--outdir', type=str, required=True)
+-parser.add_argument('INPUT', type=str, nargs='+')
++parser.add_argument('--input-list', type=str)
++parser.add_argument('INPUT', type=str, nargs='*')
+ 
+ args = parser.parse_args()
++if args.input_list:
++    with open(args.input_list, encoding='utf-8') as inputs:
++        args.INPUT.extend(line.rstrip('\r\n') for line in inputs if line.rstrip('\r\n'))
++if not args.INPUT:
++    parser.error('at least one bitcode input is required')
+ 
+ file_names = [os.path.basename(f) for f in args.INPUT]
+-command = [args.lto,
+-           '-thinlto', '-thinlto-action=thinlink',
+-           '-o', args.index] + file_names
+-res = subprocess.run(command, cwd=args.outdir)
++# LLVM accepts response files. Use one here too: shortening the Meson command
++# alone would move the same command-length failure into this child process.
++with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8',
++                                 suffix='.rsp', dir=args.outdir,
++                                 delete=False) as response:
++    for name in file_names:
++        response.write('"' + name.replace('\\', '\\\\').replace('"', '\\"') + '"\n')
++    response_name = os.path.abspath(response.name)
++
++try:
++    command = [args.lto, '-thinlto', '-thinlto-action=thinlink',
++               '-o', args.index, '@' + response_name]
++    res = subprocess.run(command, cwd=args.outdir)
++finally:
++    os.unlink(response_name)
+ 
+ exit(res.returncode)
+diff --git a/src/backend/jit/llvm/bitcode/irlink-inputs.in b/src/backend/jit/llvm/bitcode/irlink-inputs.in
+new file mode 100644
+--- /dev/null
++++ b/src/backend/jit/llvm/bitcode/irlink-inputs.in
+@@ -0,0 +1 @@
++@INPUTS@
