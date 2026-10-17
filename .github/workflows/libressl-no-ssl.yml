@@ -1,0 +1,51 @@
+name: LibreSSL PoC SSL-disabled baseline and correction
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: libressl-no-ssl
+  cancel-in-progress: false
+jobs:
+  no-ssl:
+    if: ${{ github.repository == 'Harrison-Booth/postgresql-windows-ci' && !github.event.repository.private }}
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - runner: windows-2022
+            arch: x64
+          - runner: windows-11-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          path: ci
+          persist-credentials: false
+      - uses: actions/checkout@v6
+        with:
+          repository: postgres/postgres-cfbot
+          ref: 600741b2692a01df2eb04bce9c0df11f1047a951
+          path: postgres
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+          architecture: ${{ matrix.arch }}
+      - name: Reproduce public failure and build corrected native server
+        shell: pwsh
+        env:
+          TEST_HOST_ARCH: ${{ matrix.arch }}
+        run: ./ci/tools/libressl-no-ssl-check.ps1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: libressl-no-ssl-${{ matrix.arch }}
+          retention-days: 7
+          if-no-files-found: error
+          path: |
+            evidence/
+            build-no-ssl/meson-logs/
