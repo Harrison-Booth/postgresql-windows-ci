@@ -55,3 +55,5 @@ jobs:
             cross-missing.ini
             native-zic.ini
             native-tools/meson-logs/
+
+            wrapper with spaces/invocations/

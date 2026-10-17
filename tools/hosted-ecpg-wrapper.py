@@ -32,7 +32,7 @@ for i,(url,digest) in enumerate(inputs):
  patch=e/('submitted-'+str(i)+'.patch');patch.write_bytes(data)
  call(['git','apply','--check',str(patch)],'apply-check-'+str(i));call(['git','apply',str(patch)],'apply-'+str(i))
 wrapper_dir=root/'wrapper with spaces';wrapper_dir.mkdir();wrapper=wrapper_dir/'wrapper.py'
-wrapper.write_text("import json,pathlib,subprocess,sys\np=pathlib.Path(__file__).with_name('invocations.jsonl')\nwith p.open('a',encoding='utf-8') as f:f.write(json.dumps(sys.argv[1:])+'\\n')\nraise SystemExit(subprocess.run(sys.argv[1:]).returncode)\n")
+wrapper.write_text("import json,os,pathlib,subprocess,sys,uuid\np=pathlib.Path(__file__).with_name('invocations')\np.mkdir(exist_ok=True)\nwith (p/(str(os.getpid())+'-'+uuid.uuid4().hex+'.json')).open('x',encoding='utf-8') as f:f.write(json.dumps(sys.argv[1:])+'\\n')\nraise SystemExit(subprocess.run(sys.argv[1:]).returncode)\n")
 cross=root/'cross-required.ini'
 cross.write_text("[binaries]\nc = 'cl'\ncpp = 'cl'\nar = 'lib'\nexe_wrapper = "+repr([sys.executable.replace('\\','/'),wrapper.as_posix()])+"\n[host_machine]\nsystem = 'windows'\ncpu_family = 'x86_64'\ncpu = 'x86_64'\nendian = 'little'\n[properties]\nneeds_exe_wrapper = true\n")
 missing=root/'cross-missing.ini';missing.write_text('\n'.join(x for x in cross.read_text().splitlines() if not x.startswith('exe_wrapper ='))+'\n')
@@ -50,8 +50,9 @@ pe_records=[]
 for binary in ['src/backend/postgres.exe','src/interfaces/ecpg/preproc/ecpg.exe','src/interfaces/ecpg/test/pg_regress_ecpg.exe']:
  data=(build/binary).read_bytes();offset=struct.unpack_from('<I',data,0x3c)[0];assert data[offset:offset+4]==b'PE\0\0';machine=struct.unpack_from('<H',data,offset+4)[0];assert machine==0x8664
  pe_records.append({'binary':binary,'sha256':hashlib.sha256(data).hexdigest(),'machine':hex(machine)})
-invocations=[json.loads(x) for x in (wrapper_dir/'invocations.jsonl').read_text().splitlines() if x.strip()]
+invocation_files=sorted((wrapper_dir/'invocations').glob('*.json'));assert invocation_files
+invocations=[json.loads(f.read_text(encoding='utf-8')) for f in invocation_files]
 assert any('pg_regress_ecpg' in pathlib.Path(x[0]).name for x in invocations if x)
 assert any(pathlib.Path(x[0]).name.lower()=='ecpg.exe' for x in invocations if x)
 (e/'wrapper-invocations.json').write_text(json.dumps(invocations,indent=2)+'\n')
-(e/'completion.json').write_text(json.dumps({'checked_utc':datetime.now(timezone.utc).isoformat(),'source_base':base,'submitted_attachment_sha256':[x[1] for x in inputs],'ci_head':os.environ['GITHUB_SHA'],'run_id':os.environ['GITHUB_RUN_ID'],'host_architecture':host_arch,'tested_executables':pe_records,'target_architecture':'x64','cross_mode':True,'needs_exe_wrapper':True,'wrapper_path_contains_spaces':True,'ecpg_subtests':66,'setup_groups':3,'missing_wrapper_ecpg_tests_disabled':True,'scope':'Standard hosted runner with verified native host architecture and x64 PE targets in required-wrapper cross mode. On ARM64 this exercises Windows x64 emulation. Exact original three-patch integration; not current-master runtime.'},indent=2)+'\n')
+(e/'completion.json').write_text(json.dumps({'checked_utc':datetime.now(timezone.utc).isoformat(),'source_base':base,'submitted_attachment_sha256':[x[1] for x in inputs],'ci_head':os.environ['GITHUB_SHA'],'run_id':os.environ['GITHUB_RUN_ID'],'host_architecture':host_arch,'tested_executables':pe_records,'target_architecture':'x64','cross_mode':True,'needs_exe_wrapper':True,'wrapper_path_contains_spaces':True,'invocation_log_mode':'exclusive per-invocation JSON files','ecpg_subtests':66,'setup_groups':3,'missing_wrapper_ecpg_tests_disabled':True,'scope':'Standard hosted runner with verified native host architecture and x64 PE targets in required-wrapper cross mode. On ARM64 this exercises Windows x64 emulation. Exact original three-patch integration; not current-master runtime.'},indent=2)+'\n')
