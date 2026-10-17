@@ -1,0 +1,36 @@
+name: Exact outgoing mail-series application
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: email-mail-application
+  cancel-in-progress: false
+jobs:
+  replay:
+    if: ${{ github.repository == 'Harrison-Booth/postgresql-windows-ci' && !github.event.repository.private }}
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          path: ci
+          persist-credentials: false
+      - uses: actions/checkout@v6
+        with:
+          repository: postgres/postgres
+          ref: 45fc51fcbf4534ea2f6f85e36f8155dbd5ba9851
+          path: postgres
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Verify exact source hashes and ordered git am
+        run: python ci/tools/check-outgoing-mail-series.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: outgoing-mail-application
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 7

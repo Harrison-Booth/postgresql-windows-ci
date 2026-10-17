@@ -1,0 +1,1002 @@
+From 5a8ccc68b0efa846d83e72b88f07ca47cf8d4846 Mon Sep 17 00:00:00 2001
+From: Andres Freund <andres@anarazel.de>
+Date: Sat, 27 Aug 2022 09:52:03 -0700
+Subject: [PATCH v15 1/5] meson: Add postgresql-$version-llvm-jit-bitcode.pc
+
+This .pc file collects the cflags (in particular the include directories)
+needed to compile server code, so that the LLVM JIT bitcode emission can
+reuse them. It is versioned and intentionally scoped to JIT bitcode only,
+since there is not yet agreement on a stable, general extension-build
+interface.
+
+Author: Andres Freund <andres@anarazel.de>
+Author: Nazir Bilal Yavuz <byavuz81@gmail.com>
+Reviewed-by: Peter Eisentraut <peter@eisentraut.org>
+Discussion: https://postgr.es/m/206b001d-1884-4081-bd02-bed5c92f02ba%40eisentraut.org
+---
+ src/backend/meson.build | 129 ++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 129 insertions(+)
+
+diff --git a/src/backend/meson.build b/src/backend/meson.build
+index f737d799c61..94b2418ed53 100644
+--- a/src/backend/meson.build
++++ b/src/backend/meson.build
+@@ -213,6 +213,135 @@ pg_test_mod_args = pg_mod_args + {
+ 
+ 
+ 
++###############################################################
++# Define a .pc file used when emitting LLVM JIT bitcode
++###############################################################
++
++# Versioned name, so we don't claim a too-general name before there's
++# agreement on a stable interface for building extensions.
++pg_bitcode_pc_name = 'postgresql-@0@-llvm-jit-bitcode'.format(pg_version_major)
++
++pg_ext_vars = []
++pg_ext_vars_inst = []
++pg_ext_vars_uninst = []
++
++pg_ext_cflags = pg_mod_c_args + cppflags
++pg_ext_libs = [backend_mod_deps, thread_dep, ldflags, ldflags_mod]
++pg_ext_subdirs = ['']
++
++# Compute directories to add include directories to the .pc files for.
++# This is a bit more complicated due to port/win32 etc.
++i = 0
++foreach incdir : postgres_inc_d
++  if fs.is_absolute(incdir)
++    # an absolute path from -Dextra_include_dirs
++    pg_ext_cflags += '-I@0@'.format(incdir)
++    continue
++  elif incdir.startswith('src/include')
++    subincdir = dir_include_pkg_rel / 'server' / incdir.split('src/include/').get(1, '')
++  else
++    subincdir = ''
++  endif
++  pg_ext_subdirs += subincdir
++
++  # Add directories in source / build dir containing headers to cflags for the
++  # -uninstalled.pc. Older versions of pkg-config complain if a referenced
++  # variable is not defined, so we emit an empty one for the installed .pc
++  # file.
++  pg_ext_vars += [
++    'build_inc@0@=""'.format(i),
++    'src_inc@0@=""'.format(i),
++  ]
++  pg_ext_vars_uninst += [
++    'build_inc@0@=-I${prefix}/@1@'.format(i, incdir),
++    'src_inc@0@=-I${srcdir}/@1@'.format(i, incdir),
++  ]
++  pg_ext_cflags += [
++    '${build_inc@0@}'.format(i),
++    '${src_inc@0@}'.format(i)
++  ]
++
++  i += 1
++endforeach
++
++
++# We need to have these flags inside the .pc file but it is not very nice
++# since these flags (-fwrapv for example) change the behavior.
++pg_ext_cflags_warn = pg_ext_cflags + cflags_warn
++pg_ext_cflags += cflags
++
++# Directories for extensions to install into
++# TODO: more might be needed
++#
++# These directories can be configured as absolute paths (e.g. Debian sets
++# bindir/libdir/etc. to absolute paths). In that case they must not be
++# prefixed with ${prefix}, or we would end up with doubled paths.
++foreach var : [
++  ['pkglibdir', dir_lib_pkg],
++  ['dir_data', dir_data_extension],
++  ['dir_include', dir_include_extension],
++  ['dir_doc', dir_doc_extension],
++  ['dir_bitcode', dir_bitcode],
++  # referenced on some platforms, via mod_link_with_dir
++  ['bindir', dir_bin],
++]
++  if fs.is_absolute(var[1])
++    pg_ext_vars += '@0@=@1@'.format(var[0], var[1])
++  else
++    pg_ext_vars += '@0@=${prefix}/@1@'.format(var[0], var[1])
++  endif
++endforeach
++pg_ext_vars += 'dir_mod=${pkglibdir}'
++
++# TODO: Define variables making it easy to define tests, too
++
++# Some platforms need linker flags to link with binary, they are the same
++# between building with meson and .pc file, except that we have have to
++# reference a variable to make it work for both normal and -uninstalled .pc
++# files.
++if mod_link_args_fmt.length() != 0
++  assert(link_with_inst != '')
++  assert(link_with_uninst != '')
++
++  # We define mod_link_with_dir as bindir in MacOS but there is already bindir
++  # variable in pg_ext_vars, meson gives warning if we define it again.
++  if not link_with_inst.startswith('${bindir}')
++    pg_ext_vars_inst += 'mod_link_with=@0@'.format(link_with_inst)
++  endif
++  pg_ext_vars_uninst += 'mod_link_with=@0@'.format(link_with_uninst)
++
++  foreach el : mod_link_args_fmt
++    pg_ext_libs += el.format('${mod_link_with}')
++  endforeach
++endif
++
++# main .pc used to emit LLVM JIT bitcode
++pkgconfig.generate(
++  name: pg_bitcode_pc_name,
++  description: 'PostgreSQL LLVM JIT Bitcode Support',
++  url: pg_url,
++
++  subdirs: pg_ext_subdirs,
++  libraries: pg_ext_libs,
++  extra_cflags: pg_ext_cflags,
++
++  variables: pg_ext_vars + pg_ext_vars_inst,
++  uninstalled_variables: pg_ext_vars + pg_ext_vars_uninst,
++)
++
++# a .pc depending on the above, but with all our warnings enabled
++pkgconfig.generate(
++  name: pg_bitcode_pc_name + '-warnings',
++  description: 'PostgreSQL LLVM JIT Bitcode Support with compiler warnings the same as core code',
++  requires: pg_bitcode_pc_name,
++  url: pg_url,
++  extra_cflags: pg_ext_cflags_warn,
++
++  variables: pg_ext_vars + pg_ext_vars_inst,
++  uninstalled_variables: pg_ext_vars + pg_ext_vars_uninst,
++)
++
++
+ # Shared modules that, on some system, link against the server binary. Only
+ # enter these after we defined the server build.
+ 
+-- 
+2.47.3
+
+From 59990ab9a804be91e81fab296b186a73888ccf64 Mon Sep 17 00:00:00 2001
+From: Nazir Bilal Yavuz <byavuz81@gmail.com>
+Date: Thu, 6 Mar 2025 17:46:57 +0300
+Subject: [PATCH v15 2/5] meson: Add docs for
+ postgresql-$version-llvm-jit-bitcode.pc
+
+Author: Andres Freund <andres@anarazel.de>
+Author: Nazir Bilal Yavuz <byavuz81@gmail.com>
+Reviewed-by: Peter Eisentraut <peter@eisentraut.org>
+Discussion: https://postgr.es/m/206b001d-1884-4081-bd02-bed5c92f02ba%40eisentraut.org
+---
+ doc/src/sgml/extend.sgml | 98 ++++++++++++++++++++++++++++++++++++----
+ 1 file changed, 90 insertions(+), 8 deletions(-)
+
+diff --git a/doc/src/sgml/extend.sgml b/doc/src/sgml/extend.sgml
+index 63c5ec6d1eb..ac7c2e54d2f 100644
+--- a/doc/src/sgml/extend.sgml
++++ b/doc/src/sgml/extend.sgml
+@@ -1439,21 +1439,34 @@ include $(PGXS)
+    </sect2>
+   </sect1>
+ 
+-  <sect1 id="extend-pgxs">
++  <sect1 id="extend-postgres">
+    <title>Extension Building Infrastructure</title>
+ 
+-   <indexterm zone="extend-pgxs">
+-    <primary>pgxs</primary>
+-   </indexterm>
+-
+    <para>
+     If you are thinking about distributing your
+     <productname>PostgreSQL</productname> extension modules, setting up a
+     portable build system for them can be fairly difficult.  Therefore
+     the <productname>PostgreSQL</productname> installation provides a build
+-    infrastructure for extensions, called <acronym>PGXS</acronym>, so
+-    that simple extension modules can be built simply against an
+-    already installed server.  <acronym>PGXS</acronym> is mainly intended
++    infrastructure for extensions, called <literal>PGXS</literal>
++    (<xref linkend="extend-pgxs"/>).
++   </para>
++
++   <para>
++    When <productname>PostgreSQL</productname> is built with
++    <productname>Meson</productname>, it also installs a
++    <literal>pkg-config</literal> file,
++    <literal>postgresql-&majorversion;-llvm-jit-bitcode.pc</literal>
++    (<xref linkend="extend-pkg-config"/>).  This file is used internally to
++    emit <acronym>LLVM</acronym> <acronym>JIT</acronym> bitcode; it is not
++    (yet) a stable, supported interface for building extensions.
++   </para>
++
++  </sect1>
++
++  <sect1 id="extend-pgxs">
++   <title>PGXS</title>
++
++   <para>  <acronym>PGXS</acronym> is mainly intended
+     for extensions that include C code, although it can be used for
+     pure-SQL extensions too.  Note that <acronym>PGXS</acronym> is not
+     intended to be a universal build system framework that can be used
+@@ -1929,4 +1942,73 @@ make VPATH=/path/to/extension/source/tree install
+    </tip>
+   </sect1>
+ 
++  <sect1 id="extend-pkg-config">
++   <title>postgresql-&majorversion;-llvm-jit-bitcode.pc</title>
++
++   <para>
++    When <productname>PostgreSQL</productname> is built with
++    <productname>Meson</productname>, it installs a
++    <literal>pkg-config</literal> file named
++    <literal>postgresql-&majorversion;-llvm-jit-bitcode.pc</literal>.  It is
++    used internally to emit <acronym>LLVM</acronym> <acronym>JIT</acronym>
++    bitcode for the server and for selected
++    <filename>contrib</filename> modules, and it collects the same
++    compilation flags that are used to build the server itself.
++   </para>
++
++   <para>
++    The file is deliberately versioned and named after its bitcode purpose
++    because there is not yet agreement on a stable, general-purpose interface
++    for building extensions.  It is therefore <emphasis>not</emphasis> a
++    supported replacement for <acronym>PGXS</acronym>
++    (<xref linkend="extend-pgxs"/>), and its name and contents may change
++    between major releases.
++   </para>
++
++   <para>
++    To use the
++    <literal>postgresql-&majorversion;-llvm-jit-bitcode.pc</literal>
++    infrastructure for your extension, you must write a simple
++    <filename>meson.build</filename> file. In the
++    <filename>meson.build</filename> file, you need to include the
++    <literal>postgresql-&majorversion;-llvm-jit-bitcode.pc</literal>
++    <literal>pkg-config</literal> file. Here is an example that builds an
++    extension module named <literal>isbn_issn</literal>, consisting of a
++    shared library containing some C code, an extension control file, an
++    <acronym>SQL</acronym> script, an include file (only needed if other
++    modules might need to access the extension functions without going via
++    <acronym>SQL</acronym>), and a documentation text file:
++<programlisting>
++project('isbn_issn', 'c')
++
++pg_ext = dependency('postgresql-&majorversion;-llvm-jit-bitcode-warnings')
++
++isbn_issn_sources = files('isbn_issn.c')
++
++isbn_issn = shared_module('isbn_issn',
++  isbn_issn_sources,
++  dependencies: pg_ext,
++  install_dir: pg_ext.get_variable(pkgconfig: 'dir_mod'),
++)
++
++install_data(
++     'isbn_issn.control',
++     'isbn_issn--1.0.sql',
++     install_dir: pg_ext.get_variable(pkgconfig: 'dir_data'),
++)
++
++install_headers(
++     'isbn_issn.h',
++     install_dir: pg_ext.get_variable(pkgconfig: 'dir_include'),
++)
++
++install_data(
++     'README.isbn_issn',
++     install_dir: pg_ext.get_variable(pkgconfig: 'dir_doc'),
++)
++</programlisting>
++   </para>
++
++  </sect1>
++
+  </chapter>
+-- 
+2.47.3
+
+From 75a06d4a47f25650f14a8b76a086f2644940a76b Mon Sep 17 00:00:00 2001
+From: Nazir Bilal Yavuz <byavuz81@gmail.com>
+Date: Fri, 7 Mar 2025 12:10:58 +0300
+Subject: [PATCH v15 3/5] meson: Add architecture for LLVM bitcode emission
+
+This commit adds support for bitcode emission for backend and extension
+source files. These bitcode files are installed into the
+$pkglibdir/bitcode/ directory if LLVM is found.
+
+New variable `bitcode_modules` is introduced to generate bitcode files.
+All required information is gathered in this variable. Then, this
+variable is processed by the main meson LLVM bitcode emission scripts:
+src/backend/jit/llvm/bitcode/meson.build -> src/tools/irlink.
+
+An example of a possible structure of bitcode_modules is:
+```
+bitcode_modules = [
+  {
+    'name': '...',
+    'target': ...,
+    'srcfiles': [
+      '...',
+      '...',
+    ],
+    'additional_flags': [
+      '-I...',
+      '-I...',
+    ],
+  }
+]
+```
+
+Instead of depending on the generated backend headers explicitly, each
+bitcode target lists the corresponding extracted object file as an input.
+The command only consumes the source file, but referencing the object
+file pulls in its dependencies (e.g. generated headers) without the large
+slowdown in build.ninja generation that an explicit depends causes.
+
+Author: Andres Freund <andres@anarazel.de>
+Author: Nazir Bilal Yavuz <byavuz81@gmail.com>
+Author: Diego Fronza <diego.fronza@percona.com>
+Reviewed-by: Peter Eisentraut <peter@eisentraut.org>
+Reviewed-by: Diego Fronza <diego.fronza@percona.com>
+Reviewed-by: Zsolt Parragi <zsolt.parragi@percona.com>
+Discussion: https://postgr.es/m/206b001d-1884-4081-bd02-bed5c92f02ba%40eisentraut.org
+---
+ meson.build                              | 21 +++++++++++
+ src/backend/jit/llvm/bitcode/meson.build | 47 ++++++++++++++++++++++++
+ src/backend/jit/llvm/meson.build         | 40 +++++++++++++-------
+ src/backend/meson.build                  |  9 +++++
+ src/makefiles/meson.build                |  5 +--
+ src/tools/irlink                         | 26 +++++++++++++
+ 6 files changed, 131 insertions(+), 17 deletions(-)
+ create mode 100644 src/backend/jit/llvm/bitcode/meson.build
+ create mode 100755 src/tools/irlink
+
+diff --git a/meson.build b/meson.build
+index 61b5681851e..8c8b9d84256 100644
+--- a/meson.build
++++ b/meson.build
+@@ -937,6 +937,8 @@ if have_cxx
+     # Some distros put LLVM and clang in different paths, so fallback to
+     # find via PATH, too.
+     clang = find_program(llvm_binpath / 'clang', 'clang', required: true)
++    llvm_lto = find_program(llvm_binpath / 'llvm-lto', required: true)
++    irlink = find_program('src/tools/irlink', native: true)
+   endif
+ else
+   msg = 'llvm requires a C++ compiler'
+@@ -3366,6 +3368,11 @@ update_unicode_targets = []
+ test_deps = []
+ tests = []
+ 
++# List of object files + source files to generated LLVM IR for inlining.
++# Each element is a hash of:
++# {'target': target, 'srcfiles': ..., 'additional_flags': ...}.
++bitcode_modules = []
++
+ 
+ # Default options for targets
+ 
+@@ -3689,6 +3696,11 @@ subdir('src/interfaces/ecpg/test')
+ 
+ subdir('doc/src/sgml')
+ 
++# generate bitcode for JIT inlining after giving contrib modules etc a chance
++# to add themselves to bitcode_modules[]
++subdir('src/backend/jit/llvm/bitcode', if_found: llvm)
++
++
+ generated_sources_ac += {'': ['GNUmakefile']}
+ 
+ # After processing src/test, add test_install_libs to the testprep_targets
+@@ -4299,6 +4311,15 @@ summary(
+   section: 'Programs',
+ )
+ 
++if llvm.found()
++  summary(
++    {
++      'clang': clang,
++    },
++    section: 'Programs',
++  )
++endif
++
+ summary(
+   {
+     'bonjour': bonjour,
+diff --git a/src/backend/jit/llvm/bitcode/meson.build b/src/backend/jit/llvm/bitcode/meson.build
+new file mode 100644
+index 00000000000..8c0448ea6c6
+--- /dev/null
++++ b/src/backend/jit/llvm/bitcode/meson.build
+@@ -0,0 +1,47 @@
++# Copyright (c) 2022-2026, PostgreSQL Global Development Group
++#
++# emit LLVM bitcode for JIT inlining
++
++assert(llvm.found())
++
++foreach bitcode_module : bitcode_modules
++  bitcode_targets = []
++  bitcode_obj = bitcode_module['target']
++  bitcode_cflags_local = bitcode_cflags + bitcode_module.get('additional_flags', [])
++  bitcode_name = bitcode_module.get('name', bitcode_obj.name())
++
++  foreach srcfile : bitcode_module['srcfiles']
++    if meson.version().version_compare('>=0.59')
++      srcfilename = fs.parent(srcfile) / fs.name(srcfile)
++    else
++      srcfilename = '@0@'.format(srcfile)
++    endif
++
++    targetname = '@0@_@1@.bc'.format(
++      bitcode_name,
++      srcfilename.underscorify(),
++    )
++    bitcode_targets += custom_target(
++      targetname,
++      # Depend on the bitcode object file's extracted object. Referencing the
++      # object file pulls in its dependencies (e.g. generated headers) without
++      # slowing down the build.
++      input: [srcfile, bitcode_obj.extract_objects(srcfile)],
++      output: targetname,
++      command: [llvm_irgen_command, llvm_irgen_dep_args, bitcode_cflags_local],
++      depfile: targetname + '.d',
++      install: true,
++      install_dir: dir_bitcode,
++    )
++  endforeach
++
++  index_name = '@0@.index.bc'.format(bitcode_name)
++  bitcode_index = custom_target('@0@'.format(bitcode_name),
++    output: index_name,
++    input: bitcode_targets,
++    command: [irlink, '--lto', llvm_lto, '--outdir', '@OUTDIR@', '--index', index_name, '@INPUT@'],
++    install: true,
++    install_dir: dir_bitcode,
++  )
++  backend_targets += bitcode_index
++endforeach
+diff --git a/src/backend/jit/llvm/meson.build b/src/backend/jit/llvm/meson.build
+index 7df8453ad6f..c3b5464f8c1 100644
+--- a/src/backend/jit/llvm/meson.build
++++ b/src/backend/jit/llvm/meson.build
+@@ -42,28 +42,32 @@ backend_targets += llvmjit
+ 
+ # Define a few bits and pieces used here and elsewhere to generate bitcode
+ 
+-llvm_irgen_args = [
+-  '-c', '-o', '@OUTPUT@', '@INPUT@',
++llvm_irgen_command = []
++if ccache.found()
++  llvm_irgen_command += ccache
++endif
++
++llvm_irgen_command += [
++  clang,
++  '-c', '-o', '@OUTPUT0@', '@INPUT0@',
+   '-flto=thin', '-emit-llvm',
+-  '-MD', '-MQ', '@OUTPUT@', '-MF', '@DEPFILE@',
+-  '-O2',
+   '-Wno-ignored-attributes',
+   '-Wno-empty-body',
++  '-Wno-unknown-warning-option',
++  '-Wno-compound-token-split-by-macro',
+ ]
+-
+-if ccache.found()
+-  llvm_irgen_command = ccache
+-  llvm_irgen_args = [clang.full_path()] + llvm_irgen_args
+-else
+-  llvm_irgen_command = clang
+-endif
++llvm_irgen_dep_args = ['-MD', '-MQ', '@OUTPUT0@', '-MF', '@DEPFILE@']
+ 
+ 
+ # XXX: Need to determine proper version of the function cflags for clang
+-bitcode_cflags = ['-fno-strict-aliasing', '-fwrapv']
+-bitcode_cflags += get_option('c_args')
++bitcode_cflags = ['-fno-strict-aliasing', '-fwrapv', '-O2']
+ bitcode_cflags += cppflags
+ 
++var_bitcode_cxxflags = bitcode_cflags
++var_bitcode_cxxflags += get_option('cpp_args')
++bitcode_cflags += get_option('c_args')
++var_bitcode_cflags = bitcode_cflags
++
+ # XXX: Worth improving on the logic to find directories here
+ bitcode_cflags += '-I@BUILD_ROOT@/src/include'
+ bitcode_cflags += '-I@BUILD_ROOT@/src/backend/utils/misc'
+@@ -73,7 +77,7 @@ bitcode_cflags += '-I@SOURCE_ROOT@/src/include'
+ # Note this is intentionally not installed to bitcodedir, as it's not for
+ # inlining
+ llvmjit_types = custom_target('llvmjit_types.bc',
+-  command: [llvm_irgen_command] + llvm_irgen_args + bitcode_cflags,
++  command: llvm_irgen_command + llvm_irgen_dep_args + bitcode_cflags,
+   input: 'llvmjit_types.c',
+   output: 'llvmjit_types.bc',
+   depends: [postgres],
+@@ -82,3 +86,11 @@ llvmjit_types = custom_target('llvmjit_types.bc',
+   depfile: '@BASENAME@.c.bc.d',
+ )
+ backend_targets += llvmjit_types
++
++# Figure out -I's needed to build all postgres code, including all its
++# dependencies
++pkg_config = find_program(['pkg-config', 'pkgconf'], required: true)
++r = run_command(pkg_config,
++  ['--cflags-only-I', meson.project_build_root() / 'meson-uninstalled/postgresql-@0@-llvm-jit-bitcode-uninstalled.pc'.format(pg_version_major)],
++  check: true)
++bitcode_cflags += r.stdout().split()
+diff --git a/src/backend/meson.build b/src/backend/meson.build
+index 94b2418ed53..f6f41dc144c 100644
+--- a/src/backend/meson.build
++++ b/src/backend/meson.build
+@@ -7,6 +7,9 @@ backend_link_with = [pgport_srv, common_srv]
+ generated_backend_sources = []
+ post_export_backend_sources = []
+ 
++var_bitcode_cflags = []
++var_bitcode_cxxflags = []
++
+ subdir('access')
+ subdir('archive')
+ subdir('backup')
+@@ -165,6 +168,12 @@ postgres = executable('postgres',
+ 
+ backend_targets += postgres
+ 
++bitcode_modules += {
++  'name': 'postgres',
++  'target': postgres_lib,
++  'srcfiles': backend_sources,
++}
++
+ pg_mod_c_args = cflags_mod
+ pg_mod_cxx_args = cxxflags_mod
+ pg_mod_link_args = ldflags_sl + ldflags_mod
+diff --git a/src/makefiles/meson.build b/src/makefiles/meson.build
+index 2401025d1cd..1d09aed1d86 100644
+--- a/src/makefiles/meson.build
++++ b/src/makefiles/meson.build
+@@ -113,9 +113,8 @@ pgxs_kv = {
+     ' '.join(cc.get_supported_link_arguments('-Wl,--export-dynamic')),
+   'LDFLAGS_SL': var_ldflags_sl,
+ 
+-  # TODO: requires bitcode generation to be implemented for meson
+-  'BITCODE_CFLAGS': '',
+-  'BITCODE_CXXFLAGS': '',
++  'BITCODE_CFLAGS': ' '.join(var_bitcode_cflags),
++  'BITCODE_CXXFLAGS': ' '.join(var_bitcode_cxxflags),
+ 
+   'BISONFLAGS': ' '.join(bison_flags),
+   'FLEXFLAGS': ' '.join(flex_flags),
+diff --git a/src/tools/irlink b/src/tools/irlink
+new file mode 100755
+index 00000000000..d3e30cc0581
+--- /dev/null
++++ b/src/tools/irlink
+@@ -0,0 +1,26 @@
++#!/usr/bin/env python3
++#
++# Link per-source LLVM bitcode files into a single ThinLTO index module
++# (e.g. postgres.index.bc) used for JIT inlining.
++
++import argparse
++import os
++import subprocess
++
++parser = argparse.ArgumentParser(
++    description='generate PostgreSQL JIT IR module')
++
++parser.add_argument('--index', type=str, required=True)
++parser.add_argument('--lto', type=str, required=True)
++parser.add_argument('--outdir', type=str, required=True)
++parser.add_argument('INPUT', type=str, nargs='+')
++
++args = parser.parse_args()
++
++file_names = [os.path.basename(f) for f in args.INPUT]
++command = [args.lto,
++           '-thinlto', '-thinlto-action=thinlink',
++           '-o', args.index] + file_names
++res = subprocess.run(command, cwd=args.outdir)
++
++exit(res.returncode)
+-- 
+2.47.3
+
+From e58d68225de5d723851bfe04bf25ab1a0976e950 Mon Sep 17 00:00:00 2001
+From: Nazir Bilal Yavuz <byavuz81@gmail.com>
+Date: Fri, 17 Jul 2026 16:05:44 +0300
+Subject: [PATCH v15 4/5] Use .pc file as a standart extension build interface
+
+---
+ doc/src/sgml/extend.sgml         | 39 ++++++++++++++++----------------
+ src/backend/jit/llvm/meson.build |  2 +-
+ src/backend/meson.build          | 20 ++++++++--------
+ 3 files changed, 31 insertions(+), 30 deletions(-)
+
+diff --git a/doc/src/sgml/extend.sgml b/doc/src/sgml/extend.sgml
+index ac7c2e54d2f..80db1cc2034 100644
+--- a/doc/src/sgml/extend.sgml
++++ b/doc/src/sgml/extend.sgml
+@@ -1455,10 +1455,10 @@ include $(PGXS)
+     When <productname>PostgreSQL</productname> is built with
+     <productname>Meson</productname>, it also installs a
+     <literal>pkg-config</literal> file,
+-    <literal>postgresql-&majorversion;-llvm-jit-bitcode.pc</literal>
+-    (<xref linkend="extend-pkg-config"/>).  This file is used internally to
+-    emit <acronym>LLVM</acronym> <acronym>JIT</acronym> bitcode; it is not
+-    (yet) a stable, supported interface for building extensions.
++    <literal>postgresql-&majorversion;-extension.pc</literal>
++    (<xref linkend="extend-pkg-config"/>).  This file collects the
++    compilation flags needed to build server code, so that extensions built
++    with <productname>Meson</productname> can compile against the server.
+    </para>
+ 
+   </sect1>
+@@ -1943,35 +1943,36 @@ make VPATH=/path/to/extension/source/tree install
+   </sect1>
+ 
+   <sect1 id="extend-pkg-config">
+-   <title>postgresql-&majorversion;-llvm-jit-bitcode.pc</title>
++   <title>postgresql-&majorversion;-extension.pc</title>
+ 
+    <para>
+     When <productname>PostgreSQL</productname> is built with
+     <productname>Meson</productname>, it installs a
+     <literal>pkg-config</literal> file named
+-    <literal>postgresql-&majorversion;-llvm-jit-bitcode.pc</literal>.  It is
+-    used internally to emit <acronym>LLVM</acronym> <acronym>JIT</acronym>
+-    bitcode for the server and for selected
+-    <filename>contrib</filename> modules, and it collects the same
+-    compilation flags that are used to build the server itself.
++    <literal>postgresql-&majorversion;-extension.pc</literal>.  It provides
++    the same compilation flags that are used to build the server itself, so
++    that extensions can be built with <productname>Meson</productname>
++    against a given <productname>PostgreSQL</productname> installation.  It is
++    also used internally to emit <acronym>LLVM</acronym> <acronym>JIT</acronym>
++    bitcode for the server and for selected <filename>contrib</filename>
++    modules.
+    </para>
+ 
+    <para>
+-    The file is deliberately versioned and named after its bitcode purpose
+-    because there is not yet agreement on a stable, general-purpose interface
+-    for building extensions.  It is therefore <emphasis>not</emphasis> a
+-    supported replacement for <acronym>PGXS</acronym>
+-    (<xref linkend="extend-pgxs"/>), and its name and contents may change
+-    between major releases.
++    The file is versioned by major release, so an extension can build against
++    a specific <productname>PostgreSQL</productname> major version.  It offers
++    a <productname>Meson</productname>-based alternative to
++    <acronym>PGXS</acronym> (<xref linkend="extend-pgxs"/>), which uses
++    <application>make</application>.
+    </para>
+ 
+    <para>
+     To use the
+-    <literal>postgresql-&majorversion;-llvm-jit-bitcode.pc</literal>
++    <literal>postgresql-&majorversion;-extension.pc</literal>
+     infrastructure for your extension, you must write a simple
+     <filename>meson.build</filename> file. In the
+     <filename>meson.build</filename> file, you need to include the
+-    <literal>postgresql-&majorversion;-llvm-jit-bitcode.pc</literal>
++    <literal>postgresql-&majorversion;-extension.pc</literal>
+     <literal>pkg-config</literal> file. Here is an example that builds an
+     extension module named <literal>isbn_issn</literal>, consisting of a
+     shared library containing some C code, an extension control file, an
+@@ -1981,7 +1982,7 @@ make VPATH=/path/to/extension/source/tree install
+ <programlisting>
+ project('isbn_issn', 'c')
+ 
+-pg_ext = dependency('postgresql-&majorversion;-llvm-jit-bitcode-warnings')
++pg_ext = dependency('postgresql-&majorversion;-extension-warnings')
+ 
+ isbn_issn_sources = files('isbn_issn.c')
+ 
+diff --git a/src/backend/jit/llvm/meson.build b/src/backend/jit/llvm/meson.build
+index c3b5464f8c1..1d7d1038668 100644
+--- a/src/backend/jit/llvm/meson.build
++++ b/src/backend/jit/llvm/meson.build
+@@ -91,6 +91,6 @@ backend_targets += llvmjit_types
+ # dependencies
+ pkg_config = find_program(['pkg-config', 'pkgconf'], required: true)
+ r = run_command(pkg_config,
+-  ['--cflags-only-I', meson.project_build_root() / 'meson-uninstalled/postgresql-@0@-llvm-jit-bitcode-uninstalled.pc'.format(pg_version_major)],
++  ['--cflags-only-I', meson.project_build_root() / 'meson-uninstalled/postgresql-@0@-extension-uninstalled.pc'.format(pg_version_major)],
+   check: true)
+ bitcode_cflags += r.stdout().split()
+diff --git a/src/backend/meson.build b/src/backend/meson.build
+index f6f41dc144c..2c52a6648d2 100644
+--- a/src/backend/meson.build
++++ b/src/backend/meson.build
+@@ -223,12 +223,12 @@ pg_test_mod_args = pg_mod_args + {
+ 
+ 
+ ###############################################################
+-# Define a .pc file used when emitting LLVM JIT bitcode
++# Define a .pc file for building extensions (also used
++# internally when emitting LLVM JIT bitcode)
+ ###############################################################
+ 
+-# Versioned name, so we don't claim a too-general name before there's
+-# agreement on a stable interface for building extensions.
+-pg_bitcode_pc_name = 'postgresql-@0@-llvm-jit-bitcode'.format(pg_version_major)
++# Versioned name, so extensions can build against a specific major version.
++pg_ext_pc_name = 'postgresql-@0@-extension'.format(pg_version_major)
+ 
+ pg_ext_vars = []
+ pg_ext_vars_inst = []
+@@ -324,10 +324,10 @@ if mod_link_args_fmt.length() != 0
+   endforeach
+ endif
+ 
+-# main .pc used to emit LLVM JIT bitcode
++# main .pc used to build extensions (and internally to emit LLVM JIT bitcode)
+ pkgconfig.generate(
+-  name: pg_bitcode_pc_name,
+-  description: 'PostgreSQL LLVM JIT Bitcode Support',
++  name: pg_ext_pc_name,
++  description: 'PostgreSQL Extension Build Support',
+   url: pg_url,
+ 
+   subdirs: pg_ext_subdirs,
+@@ -340,9 +340,9 @@ pkgconfig.generate(
+ 
+ # a .pc depending on the above, but with all our warnings enabled
+ pkgconfig.generate(
+-  name: pg_bitcode_pc_name + '-warnings',
+-  description: 'PostgreSQL LLVM JIT Bitcode Support with compiler warnings the same as core code',
+-  requires: pg_bitcode_pc_name,
++  name: pg_ext_pc_name + '-warnings',
++  description: 'PostgreSQL Extension Build Support with compiler warnings the same as core code',
++  requires: pg_ext_pc_name,
+   url: pg_url,
+   extra_cflags: pg_ext_cflags_warn,
+ 
+-- 
+2.47.3
+
+From dea583d84ad81fac92a70ef62e5a44119096cb8f Mon Sep 17 00:00:00 2001
+From: Nazir Bilal Yavuz <byavuz81@gmail.com>
+Date: Mon, 6 Jul 2026 16:02:06 +0300
+Subject: [PATCH v15 5/5] meson: Add LLVM bitcode emissions for contrib
+ libraries
+
+The libraries for which bitcode files are generated are selected
+manually. Bitcode is only worthwhile for extensions that provide
+lightweight SQL operators/functions that can benefit from being inlined
+into JIT-compiled expressions, so this is restricted to citext, hstore,
+intarray, ltree and pg_trgm.
+
+Author: Andres Freund <andres@anarazel.de>
+Author: Nazir Bilal Yavuz <byavuz81@gmail.com>
+Author: Diego Fronza <diego.fronza@percona.com>
+Reviewed-by: Peter Eisentraut <peter@eisentraut.org>
+Reviewed-by: Diego Fronza <diego.fronza@percona.com>
+Reviewed-by: Zsolt Parragi <zsolt.parragi@percona.com>
+Discussion: https://postgr.es/m/206b001d-1884-4081-bd02-bed5c92f02ba%40eisentraut.org
+---
+ contrib/citext/meson.build   | 5 +++++
+ contrib/hstore/meson.build   | 5 +++++
+ contrib/intarray/meson.build | 5 +++++
+ contrib/ltree/meson.build    | 9 +++++++++
+ contrib/pg_trgm/meson.build  | 5 +++++
+ 5 files changed, 29 insertions(+)
+
+diff --git a/contrib/citext/meson.build b/contrib/citext/meson.build
+index 1cc49fc999f..fc29fc843f5 100644
+--- a/contrib/citext/meson.build
++++ b/contrib/citext/meson.build
+@@ -30,6 +30,11 @@ install_data(
+   kwargs: contrib_data_args,
+ )
+ 
++bitcode_modules += {
++  'target': citext,
++  'srcfiles': citext_sources,
++}
++
+ tests += {
+   'name': 'citext',
+   'sd': meson.current_source_dir(),
+diff --git a/contrib/hstore/meson.build b/contrib/hstore/meson.build
+index 6175abc708e..37a23bca0e3 100644
+--- a/contrib/hstore/meson.build
++++ b/contrib/hstore/meson.build
+@@ -43,6 +43,11 @@ install_headers(
+   install_dir: dir_include_extension / 'hstore',
+ )
+ 
++bitcode_modules += {
++  'target': hstore,
++  'srcfiles': hstore_sources,
++}
++
+ tests += {
+   'name': 'hstore',
+   'sd': meson.current_source_dir(),
+diff --git a/contrib/intarray/meson.build b/contrib/intarray/meson.build
+index e49ff77f167..24ba3110371 100644
+--- a/contrib/intarray/meson.build
++++ b/contrib/intarray/meson.build
+@@ -33,6 +33,11 @@ install_data(
+   kwargs: contrib_data_args,
+ )
+ 
++bitcode_modules += {
++  'target': intarray,
++  'srcfiles': intarray_sources,
++}
++
+ tests += {
+   'name': 'intarray',
+   'sd': meson.current_source_dir(),
+diff --git a/contrib/ltree/meson.build b/contrib/ltree/meson.build
+index f78521bfe55..b02a133ec58 100644
+--- a/contrib/ltree/meson.build
++++ b/contrib/ltree/meson.build
+@@ -41,6 +41,15 @@ install_headers(
+   install_dir: dir_include_extension / 'ltree',
+ )
+ 
++ltree_dir = meson.current_source_dir()
++bitcode_modules += {
++  'target': ltree,
++  'srcfiles': ltree_sources,
++  'additional_flags': [
++    '-I@0@'.format(ltree_dir)
++  ]
++}
++
+ tests += {
+   'name': 'ltree',
+   'sd': meson.current_source_dir(),
+diff --git a/contrib/pg_trgm/meson.build b/contrib/pg_trgm/meson.build
+index 3ecf95ba862..31b79db7c57 100644
+--- a/contrib/pg_trgm/meson.build
++++ b/contrib/pg_trgm/meson.build
+@@ -32,6 +32,11 @@ install_data(
+   kwargs: contrib_data_args,
+ )
+ 
++bitcode_modules += {
++  'target': pg_trgm,
++  'srcfiles': pg_trgm_sources,
++}
++
+ tests += {
+   'name': 'pg_trgm',
+   'sd': meson.current_source_dir(),
+-- 
+2.47.3
+
+From 89709602244aeb9b1973c4da1e4d144887b94cc8 Mon Sep 17 00:00:00 2001
+From: Harrison Booth <harrisontbooth@gmail.com>
+Date: Tue, 13 Oct 2026 19:54:34 -0500
+Subject: [PATCH] meson: keep Windows resource objects out of contrib bitcode
+ sources
+
+---
+ contrib/citext/meson.build   | 4 +++-
+ contrib/hstore/meson.build   | 4 +++-
+ contrib/intarray/meson.build | 4 +++-
+ contrib/ltree/meson.build    | 4 +++-
+ contrib/pg_trgm/meson.build  | 4 +++-
+ 5 files changed, 15 insertions(+), 5 deletions(-)
+
+diff --git a/contrib/citext/meson.build b/contrib/citext/meson.build
+index fc29fc8..bb69151 100644
+--- a/contrib/citext/meson.build
++++ b/contrib/citext/meson.build
+@@ -4,6 +4,8 @@ citext_sources = files(
+   'citext.c',
+ )
+ 
++citext_bitcode_sources = citext_sources
++
+ if host_system == 'windows'
+   citext_sources += rc_lib_gen.process(win32ver_rc, extra_args: [
+     '--NAME', 'citext',
+@@ -32,7 +34,7 @@ install_data(
+ 
+ bitcode_modules += {
+   'target': citext,
+-  'srcfiles': citext_sources,
++  'srcfiles': citext_bitcode_sources,
+ }
+ 
+ tests += {
+diff --git a/contrib/hstore/meson.build b/contrib/hstore/meson.build
+index 37a23bc..f901bf0 100644
+--- a/contrib/hstore/meson.build
++++ b/contrib/hstore/meson.build
+@@ -12,6 +12,8 @@ hstore_sources = files(
+   'hstore_subs.c',
+ )
+ 
++hstore_bitcode_sources = hstore_sources
++
+ if host_system == 'windows'
+   hstore_sources += rc_lib_gen.process(win32ver_rc, extra_args: [
+     '--NAME', 'hstore',
+@@ -45,7 +47,7 @@ install_headers(
+ 
+ bitcode_modules += {
+   'target': hstore,
+-  'srcfiles': hstore_sources,
++  'srcfiles': hstore_bitcode_sources,
+ }
+ 
+ tests += {
+diff --git a/contrib/intarray/meson.build b/contrib/intarray/meson.build
+index 24ba311..f6b73d2 100644
+--- a/contrib/intarray/meson.build
++++ b/contrib/intarray/meson.build
+@@ -10,6 +10,8 @@ intarray_sources = files(
+   '_intbig_gist.c',
+ )
+ 
++intarray_bitcode_sources = intarray_sources
++
+ if host_system == 'windows'
+   intarray_sources += rc_lib_gen.process(win32ver_rc, extra_args: [
+     '--NAME', '_int',
+@@ -35,7 +37,7 @@ install_data(
+ 
+ bitcode_modules += {
+   'target': intarray,
+-  'srcfiles': intarray_sources,
++  'srcfiles': intarray_bitcode_sources,
+ }
+ 
+ tests += {
+diff --git a/contrib/ltree/meson.build b/contrib/ltree/meson.build
+index b02a133..fac4305 100644
+--- a/contrib/ltree/meson.build
++++ b/contrib/ltree/meson.build
+@@ -15,6 +15,8 @@ ltree_sources = files(
+ # .. so that includes of ltree/ltree.h work
+ ltree_inc = include_directories('.', '../')
+ 
++ltree_bitcode_sources = ltree_sources
++
+ if host_system == 'windows'
+   ltree_sources += rc_lib_gen.process(win32ver_rc, extra_args: [
+     '--NAME', 'ltree',
+@@ -44,7 +46,7 @@ install_headers(
+ ltree_dir = meson.current_source_dir()
+ bitcode_modules += {
+   'target': ltree,
+-  'srcfiles': ltree_sources,
++  'srcfiles': ltree_bitcode_sources,
+   'additional_flags': [
+     '-I@0@'.format(ltree_dir)
+   ]
+diff --git a/contrib/pg_trgm/meson.build b/contrib/pg_trgm/meson.build
+index 31b79db..9e51540 100644
+--- a/contrib/pg_trgm/meson.build
++++ b/contrib/pg_trgm/meson.build
+@@ -7,6 +7,8 @@ pg_trgm_sources = files(
+   'trgm_regexp.c',
+ )
+ 
++pg_trgm_bitcode_sources = pg_trgm_sources
++
+ if host_system == 'windows'
+   pg_trgm_sources += rc_lib_gen.process(win32ver_rc, extra_args: [
+     '--NAME', 'pg_trgm',
+@@ -34,7 +36,7 @@ install_data(
+ 
+ bitcode_modules += {
+   'target': pg_trgm,
+-  'srcfiles': pg_trgm_sources,
++  'srcfiles': pg_trgm_bitcode_sources,
+ }
+ 
+ tests += {

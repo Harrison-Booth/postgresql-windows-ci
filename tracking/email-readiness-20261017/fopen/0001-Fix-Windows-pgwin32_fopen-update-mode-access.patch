@@ -1,0 +1,323 @@
+From 71517a0886997dfe3c484354cd09e43989464efc Mon Sep 17 00:00:00 2001
+From: Harrison Booth <harrisontbooth@gmail.com>
+Date: Wed, 14 Oct 2026 16:20:42 -0500
+Subject: [PATCH] Fix Windows pgwin32_fopen update-mode access
+
+Handle + independently when selecting Windows fopen access rights, so
+rb+/wb+ and append update modes request read/write access. Preserve
+creation, truncation, append and text/binary mode behavior.
+
+Add a frontend libpgport regression covering update spellings,
+missing/existing files, append positioning and text/binary bytes.
+---
+ src/port/open.c                             |  14 +-
+ src/test/modules/Makefile                   |   1 +
+ src/test/modules/meson.build                |   1 +
+ src/test/modules/test_pgport/Makefile       |  18 +++
+ src/test/modules/test_pgport/README         |  13 ++
+ src/test/modules/test_pgport/meson.build    |  22 ++++
+ src/test/modules/test_pgport/t/001_fopen.pl |  23 ++++
+ src/test/modules/test_pgport/test_fopen.c   | 136 ++++++++++++++++++++
+ 8 files changed, 222 insertions(+), 6 deletions(-)
+ create mode 100644 src/test/modules/test_pgport/Makefile
+ create mode 100644 src/test/modules/test_pgport/README
+ create mode 100644 src/test/modules/test_pgport/meson.build
+ create mode 100644 src/test/modules/test_pgport/t/001_fopen.pl
+ create mode 100644 src/test/modules/test_pgport/test_fopen.c
+
+diff --git a/src/port/open.c b/src/port/open.c
+index 4be08b2cf133212cb5372f004c8ccf026096e41b..93ae02df06e5aae1527d84e920c7543831ca780b 100644
+--- a/src/port/open.c
++++ b/src/port/open.c
+@@ -207,17 +207,19 @@ pgwin32_fopen(const char *fileName, const char *mode)
+ 	int			openmode = 0;
+ 	int			fd;
+ 
+-	if (strstr(mode, "r+"))
+-		openmode |= O_RDWR;
+-	else if (strchr(mode, 'r'))
++	if (strchr(mode, 'r'))
+ 		openmode |= O_RDONLY;
+-	if (strstr(mode, "w+"))
+-		openmode |= O_RDWR | O_CREAT | O_TRUNC;
+-	else if (strchr(mode, 'w'))
++	if (strchr(mode, 'w'))
+ 		openmode |= O_WRONLY | O_CREAT | O_TRUNC;
+ 	if (strchr(mode, 'a'))
+ 		openmode |= O_WRONLY | O_CREAT | O_APPEND;
+ 
++	if (strchr(mode, '+'))
++	{
++		openmode &= ~O_WRONLY;
++		openmode |= O_RDWR;
++	}
++
+ 	if (strchr(mode, 'b'))
+ 		openmode |= O_BINARY;
+ 	if (strchr(mode, 't'))
+diff --git a/src/test/modules/Makefile b/src/test/modules/Makefile
+index 6c1504ac9323ae9f37cbb0d952b2028118bccb7c..4f9185cc73c3aad7dba9a6ae3639aa72d08e871d 100644
+--- a/src/test/modules/Makefile
++++ b/src/test/modules/Makefile
+@@ -42,6 +42,7 @@ SUBDIRS = \
+ 		  test_oat_hooks \
+ 		  test_parser \
+ 		  test_pg_dump \
++		  test_pgport \
+ 		  test_plan_advice \
+ 		  test_predtest \
+ 		  test_radixtree \
+diff --git a/src/test/modules/meson.build b/src/test/modules/meson.build
+index ef3cdb8faf9c959b3d191d13ea685b6e97b7338c..1a9b9822ab63ebdb78c3c858f21a4c6d5ebac4be 100644
+--- a/src/test/modules/meson.build
++++ b/src/test/modules/meson.build
+@@ -44,6 +44,7 @@ subdir('test_misc')
+ subdir('test_oat_hooks')
+ subdir('test_parser')
+ subdir('test_pg_dump')
++subdir('test_pgport')
+ subdir('test_plan_advice')
+ subdir('test_predtest')
+ subdir('test_radixtree')
+diff --git a/src/test/modules/test_pgport/Makefile b/src/test/modules/test_pgport/Makefile
+new file mode 100644
+index 0000000000000000000000000000000000000000..47ec3a58407e60dc8b0734753b3927c9ee6b9d61
+--- /dev/null
++++ b/src/test/modules/test_pgport/Makefile
+@@ -0,0 +1,18 @@
++# Copyright (c) 2026, PostgreSQL Global Development Group
++PGFILEDESC = "test_fopen - Windows libpgport fopen tests"
++PGAPPICON = win32
++PROGRAM = test_fopen
++OBJS = $(WIN32RES) test_fopen.o
++NO_INSTALLCHECK = 1
++TAP_TESTS = 1
++
++ifdef USE_PGXS
++PG_CONFIG = pg_config
++PGXS := $(shell $(PG_CONFIG) --pgxs)
++include $(PGXS)
++else
++subdir = src/test/modules/test_pgport
++top_builddir = ../../../..
++include $(top_builddir)/src/Makefile.global
++include $(top_srcdir)/contrib/contrib-global.mk
++endif
+diff --git a/src/test/modules/test_pgport/README b/src/test/modules/test_pgport/README
+new file mode 100644
+index 0000000000000000000000000000000000000000..1786bd0b62c1dea1c074fb406e5c5fd339031154
+--- /dev/null
++++ b/src/test/modules/test_pgport/README
+@@ -0,0 +1,13 @@
++test_pgport exercises frontend port API semantics without a database server.
++
++The Windows-only test_fopen helper links frontend libpgport and directly calls
++pgwin32_fopen. It covers existing/missing files for the standard update modes,
++both placements of the Windows text marker, and non-update read/write/append
++controls. Assertions check access through the update stream, missing-read
++no-create behavior, creation, truncation, append-after-seek, and persisted CRLF
++or LF bytes. TAP gives the helper an owned fixture path containing spaces.
++
++An optional --native argument is a manual diagnostic CRT control. The in-tree
++regression tests the PostgreSQL wrapper directly and does not depend on that
++control, an extracted wrapper function, a server, networking, or a toolchain
++installation at runtime.
+diff --git a/src/test/modules/test_pgport/meson.build b/src/test/modules/test_pgport/meson.build
+new file mode 100644
+index 0000000000000000000000000000000000000000..06258316fc01d0664dbc1449074169cdb0f6d359
+--- /dev/null
++++ b/src/test/modules/test_pgport/meson.build
+@@ -0,0 +1,22 @@
++# Copyright (c) 2026, PostgreSQL Global Development Group
++
++# Windows port API tests, without starting a server.
++if host_system != 'windows'
++  subdir_done()
++endif
++
++test_fopen = executable('test_fopen',
++  files('test_fopen.c'),
++  dependencies: [frontend_code],
++  kwargs: default_bin_args + {'install': false},
++)
++
++tests += {
++  'name': 'test_pgport',
++  'sd': meson.current_source_dir(),
++  'bd': meson.current_build_dir(),
++  'tap': {
++    'tests': ['t/001_fopen.pl'],
++    'deps': [test_fopen],
++  },
++}
+diff --git a/src/test/modules/test_pgport/t/001_fopen.pl b/src/test/modules/test_pgport/t/001_fopen.pl
+new file mode 100644
+index 0000000000000000000000000000000000000000..2e83c8ffd22b27f605dd2c1f6c609b5429c6e1ff
+--- /dev/null
++++ b/src/test/modules/test_pgport/t/001_fopen.pl
+@@ -0,0 +1,23 @@
++# Copyright (c) 2026, PostgreSQL Global Development Group
++use strict;
++use warnings FATAL => 'all';
++use PostgreSQL::Test::Utils;
++use Test::More;
++use IPC::Run qw(run);
++
++plan skip_all => 'Windows fopen access and translation modes'
++  unless $windows_os;
++
++my $fixture_dir = PostgreSQL::Test::Utils::tempdir_short;
++my $fixture = "$fixture_dir/fopen owned fixture.dat";
++my ($stdout, $stderr) = ('', '');
++my $ok = run [ 'test_fopen', $fixture ], '>' => \$stdout, '2>' => \$stderr;
++ok($ok, 'libpgport implements Windows fopen mode semantics');
++like(
++	$stdout,
++	qr/cases=48 failures=0/,
++	'all update and non-update controls pass');
++is($stderr, '', 'no fixture or stream errors');
++ok(!-e $fixture, 'fixture is removed');
++diag($stdout) unless $ok;
++done_testing();
+diff --git a/src/test/modules/test_pgport/test_fopen.c b/src/test/modules/test_pgport/test_fopen.c
+new file mode 100644
+index 0000000000000000000000000000000000000000..3cc1314efed50983ede9fec7a4e786cbd6f533ae
+--- /dev/null
++++ b/src/test/modules/test_pgport/test_fopen.c
+@@ -0,0 +1,136 @@
++/*
++ * Test Windows fopen access, lifecycle and translation modes through libpgport.
++ * Copyright (c) 2026, PostgreSQL Global Development Group
++ */
++#include "postgres_fe.h"
++
++#ifdef WIN32
++/* Keep a native CRT control, while the test path calls the port API explicitly. */
++#undef fopen
++
++static int	failures;
++
++static FILE *
++open_test(const char *path, const char *mode, bool native)
++{
++	return native ? fopen(path, mode) : pgwin32_fopen(path, mode);
++}
++
++static void
++run_case(const char *path, const char *mode, bool existing, bool native)
++{
++	FILE	   *stream;
++	char		raw[16] = {0};
++	char		readback[16] = {0};
++	char		expected[16];
++	bool		append = mode[0] == 'a';
++	bool		binary = strchr(mode, 'b') != NULL;
++	bool		update = strchr(mode, '+') != NULL;
++	bool		writing = mode[0] != 'r' || update;
++	int			errors = 0;
++	int			open_errno;
++	size_t		n;
++	LARGE_INTEGER size;
++
++	if (remove(path) != 0 && errno != ENOENT)
++	{
++		fprintf(stderr, "cannot remove fixture: %s\n", strerror(errno));
++		exit(2);
++	}
++	if (existing)
++	{
++		stream = fopen(path, "wb");
++		if (!stream || fwrite("A", 1, 1, stream) != 1 || fclose(stream) != 0)
++			exit(2);
++	}
++	errno = 0;
++	stream = open_test(path, mode, native);
++	open_errno = errno;
++	if (!existing && mode[0] == 'r')
++	{
++		if (stream || open_errno != ENOENT)
++			errors++;
++		if (stream)
++			fclose(stream);
++		if (GetFileAttributesA(path) != INVALID_FILE_ATTRIBUTES)
++			errors++;
++		goto report;
++	}
++	if (!stream)
++	{
++		errors++;
++		goto report;
++	}
++	if (!GetFileSizeEx((HANDLE) _get_osfhandle(_fileno(stream)), &size))
++		exit(2);
++	if (size.QuadPart != (existing && mode[0] != 'w' ? 1 : 0))
++		errors++;
++	if (fseek(stream, 0, SEEK_SET) != 0)
++		errors++;
++	if (writing)
++	{
++		if (fwrite("X\n", 1, 2, stream) != 2 || fflush(stream) != 0)
++			errors++;
++	}
++	if (mode[0] == 'r' || update)
++	{
++		if (fseek(stream, 0, SEEK_SET) != 0)
++			errors++;
++		n = fread(readback, 1, sizeof(readback) - 1, stream);
++		if (ferror(stream) ||
++			strcmp(readback, !writing ? "A" : existing && append ? "AX\n" : "X\n") != 0)
++			errors++;
++	}
++	if (fclose(stream) != 0)
++		errors++;
++	stream = fopen(path, "rb");
++	if (!stream)
++		exit(2);
++	n = fread(raw, 1, sizeof(raw) - 1, stream);
++	if (ferror(stream) || fclose(stream) != 0)
++		exit(2);
++	if (writing)
++		snprintf(expected, sizeof(expected), "%sX%s", existing && append ? "A" : "", binary ? "\n" : "\r\n");
++	else
++		strlcpy(expected, "A", sizeof(expected));
++	if (n != strlen(expected) || memcmp(raw, expected, n) != 0)
++		errors++;
++
++report:
++	printf("%s %s %s errors=%d\n", existing ? "existing" : "missing",
++		   mode, errors ? "FAIL" : "PASS", errors);
++	failures += errors != 0;
++	if (remove(path) != 0 && errno != ENOENT)
++		exit(2);
++}
++#endif
++
++int
++main(int argc, char **argv)
++{
++#ifdef WIN32
++	const char *modes[] = {
++		"r+", "r+b", "rb+", "r+t", "rt+",
++		"w+", "w+b", "wb+", "w+t", "wt+",
++		"a+", "a+b", "ab+", "a+t", "at+",
++		"r", "rb", "rt", "w", "wb", "wt", "a", "ab", "at"
++	};
++	bool		native;
++
++	if (argc < 2 || argc > 3 || (argc == 3 && strcmp(argv[2], "--native") != 0))
++	{
++		fprintf(stderr, "usage: test_fopen fixture-path [--native]\n");
++		return 2;
++	}
++	native = argc == 3;
++	for (int i = 0; i < lengthof(modes); i++)
++	{
++		run_case(argv[1], modes[i], false, native);
++		run_case(argv[1], modes[i], true, native);
++	}
++	printf("cases=48 failures=%d\n", failures);
++	return failures ? 1 : 0;
++#else
++	return 0;
++#endif
++}
