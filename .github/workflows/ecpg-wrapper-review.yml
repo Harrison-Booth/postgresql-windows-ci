@@ -1,0 +1,46 @@
+name: Exact ECPG v2 required-wrapper control
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ecpg-required-wrapper
+  cancel-in-progress: false
+jobs:
+  required-wrapper:
+    if: ${{ github.repository == 'Harrison-Booth/postgresql-windows-ci' && !github.event.repository.private }}
+    runs-on: windows-2022
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          path: ci
+          persist-credentials: false
+      - uses: actions/checkout@v6
+        with:
+          repository: postgres/postgres
+          ref: 8e82d6610e7280d7870c0c36ff1c797e3cfb3e09
+          path: postgres
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+          architecture: x64
+      - name: Test exact original integration with required quoted Python wrapper
+        shell: pwsh
+        run: ./ci/tools/hosted-ecpg-wrapper.ps1
+      - name: Preserve all results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ecpg-required-wrapper
+          retention-days: 3
+          if-no-files-found: error
+          path: |
+            evidence/
+            build-required/meson-logs/
+            build-required/testrun/**/log/
+            build-required/testrun/**/regression.diffs
+            build-no-wrapper/meson-logs/
+            cross-required.ini
+            cross-missing.ini
