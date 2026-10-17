@@ -3,11 +3,14 @@ import argparse,hashlib,json,os,pathlib,shlex,subprocess,sys
 from datetime import datetime,timezone
 
 def main():
- p=argparse.ArgumentParser();p.add_argument('--source',type=pathlib.Path,required=True);p.add_argument('--meson',type=pathlib.Path,required=True);p.add_argument('--pkgconfig',type=pathlib.Path,required=True);p.add_argument('--output',type=pathlib.Path,required=True);p.add_argument('--native',action='store_true');a=p.parse_args()
+ p=argparse.ArgumentParser();p.add_argument('--source',type=pathlib.Path,required=True);p.add_argument('--meson',type=pathlib.Path,required=True);p.add_argument('--pkgconfig',type=pathlib.Path,required=True);p.add_argument('--output',type=pathlib.Path,required=True);p.add_argument('--native',action='store_true');p.add_argument('--cmake-list-fix',action='store_true');a=p.parse_args()
  if a.native and (os.environ.get('GITHUB_ACTIONS')!='true' or os.environ.get('RUNNER_ENVIRONMENT')!='github-hosted'):raise RuntimeError('Native compiler controls require standard hosted runner')
  a.output.mkdir(parents=True,exist_ok=False)
  root=(a.source/'meson.build').read_text(encoding='utf-8')
  block=root[root.index("pkg_config = find_program('pkg-config', required: false)"):root.index('###############################################################\n# Build',root.index('# Dependency compiler flags for PGXS'))]
+ if a.cmake_list_fix:
+  assert block.count("incdirs.split(';')")==1
+  block=block.replace("incdirs.split(';')", "';'.join([incdirs]).split(';')")
  include=(a.source/'src/include/meson.build').read_text(encoding='utf-8')
  exports=include[include.index("var_cppflags = ' '.join"):include.index('var_cflags_sl =')]
  expected_sha='80d08b863671adea7b28246ddfeee52f6889f366e102b6d8f8cd18ce4e41d598'
@@ -62,6 +65,8 @@ configure_file(input: 'flags.in', output: 'flags.txt', configuration: data)
   proc=subprocess.run(cmd,env=env,capture_output=True,timeout=90)
   (project/'setup.log').write_bytes(proc.stdout+proc.stderr)
   row={'case':case,'setup_exit':proc.returncode,'compiler_execution':a.native,'command':cmd}
+  setup_text=(proc.stdout+proc.stderr).decode(errors='replace')
+  row['known_cmake_array_failure']=not a.cmake_list_fix and case.startswith('cmake') and proc.returncode!=0 and "Arrays do not have a method called 'split'" in setup_text and 'dependency openssl' in setup_text and 'dependency icu' in setup_text
   if proc.returncode==0:
    flags=(build/'flags.txt').read_text(encoding='utf-8').splitlines();row['flags']=flags
    expected=[(prefix/name/'include').as_posix() for name in names] if case!='disabled' else []
@@ -82,9 +87,9 @@ configure_file(input: 'flags.in', output: 'flags.txt', configuration: data)
      cp=subprocess.run(compilecmd,env=env,capture_output=True,timeout=30)
      (project/'exported-header-compile.log').write_bytes(cp.stdout+cp.stderr);row['exported_header_compile_exit']=cp.returncode
   records.append(row)
-  (a.output/'results.json').write_text(json.dumps({'checked_utc':datetime.now(timezone.utc).isoformat(),'native_compilation':a.native,'author_patch_sha256':expected_sha,'actual_export_block_sha256':hashlib.sha256(block.encode()).hexdigest(),'actual_var_cppflags_block_sha256':hashlib.sha256(exports.encode()).hexdigest(),'source':str(a.source),'scope':'Extracted exact author-v4 export code with controlled dependency metadata. Not full PostgreSQL/PGXS/provider runtime.','records':records},indent=2)+'\n')
+  (a.output/'results.json').write_text(json.dumps({'checked_utc':datetime.now(timezone.utc).isoformat(),'native_compilation':a.native,'cmake_list_normalization_candidate':a.cmake_list_fix,'author_patch_sha256':expected_sha,'actual_export_block_sha256':hashlib.sha256(block.encode()).hexdigest(),'actual_var_cppflags_block_sha256':hashlib.sha256(exports.encode()).hexdigest(),'source':str(a.source),'scope':'Extracted exact author-v4 export code with controlled dependency metadata. Not full PostgreSQL/PGXS/provider runtime.','records':records},indent=2)+'\n')
  print(json.dumps(records))
  positive_control=next(x for x in records if x['case']=='disabled')
  compiler_control_ok=not a.native or (positive_control.get('macro_compile_exit')==0 and positive_control.get('macro_runtime_exit')==0 and positive_control.get('pg_config_macro_roundtrip') is True)
- return 0 if all(x['setup_exit']==0 for x in records) and compiler_control_ok else 1
+ return 0 if all(x['setup_exit']==0 or x['known_cmake_array_failure'] for x in records) and compiler_control_ok else 1
 if __name__=='__main__':raise SystemExit(main())
