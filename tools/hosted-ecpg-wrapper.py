@@ -1,9 +1,11 @@
 """Hosted-only exact submitted ECPG v2 required-wrapper regression control."""
-import hashlib,json,os,pathlib,subprocess,sys,urllib.request
+import hashlib,json,os,pathlib,subprocess,sys,urllib.request,struct,platform
 from datetime import datetime,timezone
 assert os.environ.get('GITHUB_ACTIONS')=='true' and os.environ.get('RUNNER_ENVIRONMENT')=='github-hosted'
 root=pathlib.Path(os.environ['GITHUB_WORKSPACE']);source=root/'postgres';e=root/'evidence';e.mkdir(exist_ok=True)
 base='8e82d6610e7280d7870c0c36ff1c797e3cfb3e09'
+host_arch=os.environ['TEST_HOST_ARCH'];assert host_arch in ['x64','arm64']
+assert platform.machine().lower() in ({'x64':['amd64','x86_64'],'arm64':['arm64','aarch64']}[host_arch])
 def call(args,name,timeout=600,cwd=source):
  with (e/(name+'.log')).open('wb') as log:
   p=subprocess.run(args,cwd=cwd,stdout=log,stderr=subprocess.STDOUT,timeout=timeout)
@@ -33,8 +35,12 @@ call(['meson','test','-C',str(build),'--num-processes','1','--print-errorlogs','
 records=[json.loads(x) for x in (build/'meson-logs/testlog.json').read_text().splitlines() if x.strip()]
 assert len(records)==4 and all(x['result']=='OK' for x in records),records
 ecpg=next(x for x in records if 'ecpg/ecpg' in x['name']);assert '1..66' in ecpg['stdout'] and 'All 66 tests passed' in ecpg['stdout'],ecpg
+pe_records=[]
+for binary in ['src/backend/postgres.exe','src/interfaces/ecpg/preproc/ecpg.exe','src/interfaces/ecpg/test/pg_regress_ecpg.exe']:
+ data=(build/binary).read_bytes();offset=struct.unpack_from('<I',data,0x3c)[0];assert data[offset:offset+4]==b'PE\0\0';machine=struct.unpack_from('<H',data,offset+4)[0];assert machine==0x8664
+ pe_records.append({'binary':binary,'sha256':hashlib.sha256(data).hexdigest(),'machine':hex(machine)})
 invocations=[json.loads(x) for x in (wrapper_dir/'invocations.jsonl').read_text().splitlines() if x.strip()]
 assert any('pg_regress_ecpg' in pathlib.Path(x[0]).name for x in invocations if x)
 assert any(pathlib.Path(x[0]).name.lower()=='ecpg.exe' for x in invocations if x)
 (e/'wrapper-invocations.json').write_text(json.dumps(invocations,indent=2)+'\n')
-(e/'completion.json').write_text(json.dumps({'checked_utc':datetime.now(timezone.utc).isoformat(),'source_base':base,'submitted_attachment_sha256':[x[1] for x in inputs],'ci_head':os.environ['GITHUB_SHA'],'run_id':os.environ['GITHUB_RUN_ID'],'host_architecture':'x64','target_architecture':'x64','cross_mode':True,'needs_exe_wrapper':True,'wrapper_path_contains_spaces':True,'ecpg_subtests':66,'setup_groups':3,'missing_wrapper_ecpg_tests_disabled':True,'scope':'Standard hosted x64 runner, x64 target in Meson cross mode, exact original three-patch integration. Not ARM64 emulation or current-master runtime.'},indent=2)+'\n')
+(e/'completion.json').write_text(json.dumps({'checked_utc':datetime.now(timezone.utc).isoformat(),'source_base':base,'submitted_attachment_sha256':[x[1] for x in inputs],'ci_head':os.environ['GITHUB_SHA'],'run_id':os.environ['GITHUB_RUN_ID'],'host_architecture':host_arch,'tested_executables':pe_records,'target_architecture':'x64','cross_mode':True,'needs_exe_wrapper':True,'wrapper_path_contains_spaces':True,'ecpg_subtests':66,'setup_groups':3,'missing_wrapper_ecpg_tests_disabled':True,'scope':'Standard hosted runner with verified native host architecture and x64 PE targets in required-wrapper cross mode. On ARM64 this exercises Windows x64 emulation. Exact original three-patch integration; not current-master runtime.'},indent=2)+'\n')

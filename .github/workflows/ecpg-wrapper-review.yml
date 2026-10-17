@@ -1,15 +1,22 @@
 name: Exact ECPG v2 required-wrapper control
 on:
   workflow_dispatch:
+    inputs:
+      host_arch:
+        description: Native runner architecture; target stays x64
+        type: choice
+        options: [x64, arm64]
+        default: x64
+        required: true
 permissions:
   contents: read
 concurrency:
-  group: ecpg-required-wrapper
+  group: ecpg-required-wrapper-${{ inputs.host_arch }}
   cancel-in-progress: false
 jobs:
   required-wrapper:
     if: ${{ github.repository == 'Harrison-Booth/postgresql-windows-ci' && !github.event.repository.private }}
-    runs-on: windows-2022
+    runs-on: ${{ inputs.host_arch == 'arm64' && 'windows-11-arm' || 'windows-2022' }}
     timeout-minutes: 50
     steps:
       - uses: actions/checkout@v6
@@ -25,15 +32,17 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.13'
-          architecture: x64
+          architecture: ${{ inputs.host_arch }}
       - name: Test exact original integration with required quoted Python wrapper
         shell: pwsh
+        env:
+          TEST_HOST_ARCH: ${{ inputs.host_arch }}
         run: ./ci/tools/hosted-ecpg-wrapper.ps1
       - name: Preserve all results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ecpg-required-wrapper
+          name: ecpg-required-wrapper-${{ inputs.host_arch }}
           retention-days: 3
           if-no-files-found: error
           path: |

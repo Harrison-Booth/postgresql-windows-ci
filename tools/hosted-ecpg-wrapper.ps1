@@ -1,6 +1,8 @@
 $ErrorActionPreference='Stop'
 if($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_ENVIRONMENT -ne 'github-hosted') {throw 'Standard hosted runners only'}
-if([Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() -ne 'X64') {throw 'Native x64 host required'}
+$taskHostArch=$env:TEST_HOST_ARCH
+if($taskHostArch -notin @('x64','arm64')){throw 'Explicit host architecture required'}
+if([Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant() -ne $taskHostArch) {throw 'Native host architecture mismatch'}
 $env:PATH="C:/Strawberry/perl/bin;C:/Strawberry/c/bin;C:/Program Files/Git/usr/bin;$env:PATH"
 New-Item -ItemType Directory -Path evidence | Out-Null
 Start-Transcript -Path evidence/runner.log
@@ -9,7 +11,7 @@ try {
  $vs=& $vswhere -latest -products '*' -property installationPath
  if($LASTEXITCODE -ne 0 -or -not $vs){throw 'Visual Studio unavailable'}
  Import-Module (Join-Path $vs 'Common7/Tools/Microsoft.VisualStudio.DevShell.dll')
- Enter-VsDevShell -VsInstallPath $vs -SkipAutomaticLocation -DevCmdArguments '-arch=x64 -host_arch=x64'
+ Enter-VsDevShell -VsInstallPath $vs -SkipAutomaticLocation -DevCmdArguments "-arch=x64 -host_arch=$taskHostArch"
  $archive=Join-Path $env:RUNNER_TEMP 'ecpg-winflex.zip'
  $flex=Join-Path $env:RUNNER_TEMP 'ecpg-winflex'
  Invoke-WebRequest 'https://github.com/lexxmark/winflexbison/releases/download/v2.5.25/win_flex_bison-2.5.25.zip' -OutFile $archive
