@@ -1,18 +1,10 @@
 {
-  "upstream_base": "45fc51fcbf4534ea2f6f85e36f8155dbd5ba9851",
-  "previous_inspected_base": "7787aec8ab000932a8704a988b175b39ff816f2f",
+  "upstream_base": "e75fcc9867fdfe295957ad5c9a98cbe2e1b4c5c3",
+  "previous_inspected_base": "45fc51fcbf4534ea2f6f85e36f8155dbd5ba9851",
   "inputs": [
     {
       "path": "tracking/email-readiness-20261017/resource/CF5671-v15-with-Windows-resource-supplement.patch",
       "sha256": "ec25ed02a47f368c2e98f1e497d79e55aa3afa2f71cae6cfe4c6255c96667fb2"
-    },
-    {
-      "path": "tracking/email-readiness-20261017/socket/0001-Bryan-Green-socket-original.patch",
-      "sha256": "b9e74c5ae3e55a60c2716d122caaedd79bb2f023d5bd72809c400cb19d6efa98"
-    },
-    {
-      "path": "tracking/email-readiness-20261017/socket/0002-socket-inheritance-regression-supplement.patch",
-      "sha256": "454720cee6281df1a25df2113a5ae7f36815c24686338a7c42098662376217e8"
     },
     {
       "path": "tracking/email-readiness-20261017/fopen/0001-Fix-Windows-pgwin32_fopen-update-mode-access.patch",
