@@ -9,8 +9,6 @@ import sys
 
 
 def patch_id(path: pathlib.Path) -> str:
-    args.output.mkdir(parents=True, exist_ok=False)
-    case_output = args.output / "cases"
     proc = subprocess.run(
         ["git", "patch-id", "--stable"],
         input=path.read_bytes(),
@@ -28,6 +26,8 @@ def main() -> int:
     parser.add_argument("--pkgconfig", type=pathlib.Path, required=True)
     parser.add_argument("--output", type=pathlib.Path, required=True)
     args = parser.parse_args()
+    args.output.mkdir(parents=True, exist_ok=False)
+    case_output = args.output / "cases"
 
     if os.environ.get("GITHUB_ACTIONS") != "true" or os.environ.get("RUNNER_ENVIRONMENT") != "github-hosted":
         raise RuntimeError("Native export checks require standard GitHub-hosted runners")
