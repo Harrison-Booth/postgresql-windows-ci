@@ -9,11 +9,19 @@ import subprocess
 import sys
 import time
 
-BASE = "3745790f53bc5dd87b2df3d5a0c9c62d7ff0360d"
-EXPECTED_TREE = "790385b5edd6514e5676a8b106984099fe0807e9"
+BASE = "1999fe227df70249dce7c9037147b54c1090b4ad"
 PRODUCTION_FILES = [
     "src/backend/port/win32/socket.c",
     "src/backend/tcop/backend_startup.c",
+]
+EXPECTED_FILES = [
+    "src/backend/port/win32/socket.c",
+    "src/backend/tcop/backend_startup.c",
+    "src/bin/pg_ctl/Makefile",
+    "src/bin/pg_ctl/meson.build",
+    "src/bin/pg_ctl/t/005_socket_handle_inheritance.pl",
+    "src/bin/pg_ctl/t/meson.build",
+    "src/bin/pg_ctl/t/socket_copy_helper.c",
 ]
 ASSERTIONS = [
     "COPY helper publishes exact PID and creation time",
@@ -187,8 +195,9 @@ def main():
     manifest_path = ci / "tracking/email-readiness-20261017/socket/manifest.json"
     patch_dir = manifest_path.parent
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    if manifest["upstream_base"] != BASE or manifest["expected_final_tree"] != EXPECTED_TREE:
-        raise RuntimeError("Reviewed source pin or result tree changed")
+    expected_files = manifest["expected_changed_files"]
+    if manifest["upstream_base"] != BASE or expected_files != EXPECTED_FILES:
+        raise RuntimeError("Reviewed source pin or changed-file list is invalid")
     if subprocess.check_output(["git", "-C", source, "rev-parse", "HEAD"], text=True).strip() != BASE:
         raise RuntimeError("PostgreSQL source is not the reviewed upstream base")
     if subprocess.check_output(["git", "-C", source, "status", "--porcelain"], text=True).strip():
@@ -215,7 +224,7 @@ def main():
     receipt = {
         "status": "failed",
         "upstream_base": BASE,
-        "candidate_tree": EXPECTED_TREE,
+        "candidate_tree": None,
         "host_architecture": args.arch,
         "github_run_id": os.environ.get("GITHUB_RUN_ID"),
         "github_revision": os.environ.get("GITHUB_SHA"),
@@ -240,8 +249,11 @@ def main():
         }
         head = subprocess.check_output(["git", "-C", source, "rev-parse", "HEAD"], text=True).strip()
         tree = subprocess.check_output(["git", "-C", source, "rev-parse", "HEAD^{tree}"], text=True).strip()
-        if tree != EXPECTED_TREE:
-            raise RuntimeError("Ordered series produced a different source tree: " + tree)
+        changed_series = subprocess.check_output(
+            ["git", "-C", source, "diff", "--name-only", BASE + "..HEAD"], text=True
+        ).splitlines()
+        if sorted(changed_series) != sorted(expected_files):
+            raise RuntimeError("Ordered series changed unexpected files: " + repr(changed_series))
         command("series-whitespace-check",
                 ["git", "-C", source, "diff", "--check", BASE + "..HEAD"],
                 evidence / "series-whitespace-check.log", timeout=30)

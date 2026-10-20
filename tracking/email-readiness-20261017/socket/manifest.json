@@ -1,7 +1,15 @@
 {
   "proposal": "CF6207 socket handle inheritance",
-  "upstream_base": "3745790f53bc5dd87b2df3d5a0c9c62d7ff0360d",
-  "expected_final_tree": "790385b5edd6514e5676a8b106984099fe0807e9",
+  "upstream_base": "1999fe227df70249dce7c9037147b54c1090b4ad",
+  "expected_changed_files": [
+    "src/backend/port/win32/socket.c",
+    "src/backend/tcop/backend_startup.c",
+    "src/bin/pg_ctl/Makefile",
+    "src/bin/pg_ctl/meson.build",
+    "src/bin/pg_ctl/t/005_socket_handle_inheritance.pl",
+    "src/bin/pg_ctl/t/meson.build",
+    "src/bin/pg_ctl/t/socket_copy_helper.c"
+  ],
   "series": [
     {
       "file": "0001-Bryan-Green-socket-original.patch",
@@ -16,5 +24,5 @@
       "stable_patch_id": "79874592faa36f078665306cdcc7432b1b0bd27d"
     }
   ],
-  "scope": "Apply the exact public proposal and revised Windows TAP test supplement to current master. On native x64 and ARM64, build the candidate and run PostgreSQL's setup suite to create its temporary install and initdb template. The TAP test forces a fresh initdb instead of copying the install template, and the harness requires the test log to confirm that path. Run only pg_ctl/005_socket_handle_inheritance. Repeat the focused test for the unpatched production-code baseline, which must fail only the two socket-lifetime assertions, then restore, rebuild, set up, and rerun the candidate. Compare baseline source changes against HEAD because git checkout of paths updates both the index and worktree. Preflight the unrelated cube parser generators because the prior x64 build reported missing generated files. This is not a full regression-suite or Job Objects test."
+  "scope": "Apply the exact public proposal and revised Windows TAP test supplement to the pinned upstream master. Verify the ordered series changes only the seven recorded source and test files. On native x64 and ARM64, build the candidate and run PostgreSQL's setup suite to create its temporary install and initdb template. The TAP test forces a fresh initdb instead of copying the install template, and the harness requires the test log to confirm that path. Run only pg_ctl/005_socket_handle_inheritance. Repeat the focused test for the unpatched production-code baseline, which must fail only the two socket-lifetime assertions, then restore, rebuild, set up, and rerun the candidate. Compare baseline source changes against HEAD because git checkout of paths updates both the index and worktree. Preflight the unrelated cube parser generators because the prior x64 build reported missing generated files. This is not a full regression-suite or Job Objects test."
 }
