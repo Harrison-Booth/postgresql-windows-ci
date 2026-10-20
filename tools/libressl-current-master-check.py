@@ -74,9 +74,26 @@ def require_success(args, name, cwd=None):
     return log
 
 # Replay the public proposal on current master, then prove the attached fix is needed.
+clean_status = subprocess.check_output(["git", "-C", str(src), "status", "--porcelain"], text=True)
+if clean_status:
+    raise SystemExit("Current-master checkout is not clean before the public replay: " + clean_status)
 require_success(["git", "-C", str(src), "apply", "--check", str(replay_patch)], "check-public-replay-apply")
 require_success(["git", "-C", str(src), "apply", str(replay_patch)], "apply-public-replay")
 require_success(["git", "-C", str(src), "diff", "--check"], "public-replay-whitespace-check")
+expected_replay_files = sorted(re.findall(r"^diff --git a/(.*?) b/", replay_patch.read_text(encoding="utf-8"), re.MULTILINE))
+require_success(["git", "-C", str(src), "add", "--all"], "stage-public-replay")
+replay_files = subprocess.check_output(
+    ["git", "-C", str(src), "diff", "--cached", "--name-only"], text=True
+).splitlines()
+if replay_files != expected_replay_files:
+    raise SystemExit("Public replay changed an unexpected file set: " + repr(replay_files))
+public_replay_commit_log = require_success(
+    ["git", "-C", str(src), "-c", "user.name=PostgreSQL CI validation",
+     "-c", "user.email=ci@example.invalid", "commit", "-m", "CI-only replay of public CF7008 proposal"],
+    "commit-public-replay-prerequisite",
+)
+public_replay_head = subprocess.check_output(["git", "-C", str(src), "rev-parse", "HEAD"], text=True).strip()
+public_replay_tree = subprocess.check_output(["git", "-C", str(src), "rev-parse", "HEAD^{tree}"], text=True).strip()
 
 build = root / "build-no-ssl"
 require_success(
@@ -107,7 +124,7 @@ mail_application = {
     "method": "git am --keep-cr after current-master public replay",
     "exit_code": 0,
     "base": base,
-    "prerequisite_head": subprocess.check_output(["git", "-C", str(src), "rev-parse", "HEAD^"], text=True).strip(),
+    "prerequisite_head": public_replay_head,
     "head": mail_head,
     "tree": mail_tree,
     "attachment_sha256": sha256(mail_attachment),
@@ -150,6 +167,14 @@ if pe_machine != expected_machine:
 
 record = {
     "upstream_base": base,
+    "public_replay": {
+        "head": public_replay_head,
+        "tree": public_replay_tree,
+        "files": replay_files,
+        "patch_sha256": sha256(replay_patch),
+        "commit_log_sha256": sha256(public_replay_commit_log),
+        "committer_identity_scope": "single CI-only prerequisite commit; no upstream claim",
+    },
     "mail_formatted_application": mail_application,
     "public_replay_sha256": sha256(replay_patch),
     "public_replay_patch_id": patch_id(replay_patch),
