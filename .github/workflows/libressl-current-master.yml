@@ -1,0 +1,51 @@
+name: LibreSSL follow-up on current PostgreSQL master
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: libressl-current-master
+  cancel-in-progress: false
+jobs:
+  no-ssl:
+    if: ${{ github.repository == 'Harrison-Booth/postgresql-windows-ci' && !github.event.repository.private }}
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - runner: windows-2022
+            arch: x64
+          - runner: windows-11-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          path: ci
+          persist-credentials: false
+      - uses: actions/checkout@v6
+        with:
+          repository: postgres/postgres
+          ref: 776df8a6d7c42282825d658ff631509f033e8f34
+          path: postgres
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+          architecture: ${{ matrix.arch }}
+      - name: Reproduce no-SSL failure and test the follow-up code diff
+        shell: pwsh
+        env:
+          TEST_HOST_ARCH: ${{ matrix.arch }}
+        run: ./ci/tools/libressl-current-master-check.ps1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: libressl-current-master-${{ matrix.arch }}
+          retention-days: 7
+          if-no-files-found: error
+          path: |
+            evidence/
+            build-no-ssl/meson-logs/

@@ -1,0 +1,27 @@
+{
+  "upstream_base": "776df8a6d7c42282825d658ff631509f033e8f34",
+  "upstream_url": "https://git.postgresql.org/git/postgresql.git",
+  "candidate": "Daniel Gustafsson CF7008 public LibreSSL/OpenSSL split, locally replayed for test against current master",
+  "original_public_attachment": {
+    "url": "https://www.postgresql.org/message-id/attachment/199573/vPoC-0001-ssl-Split-OpenSSL-and-LibreSSL-into-separate-mo.patch",
+    "sha256": "07d7703fd42247a2844eb994034dd3131fead626d92531dc0a1ef3164c75d612",
+    "direct_apply_to_current_master": false,
+    "note": "The original July attachment does not apply directly to current master because the SNI callback declaration changed. The local replay patch reflects the already-reviewed rebase adjustment. It is test input, not an author revision or upstream submission."
+  },
+  "inputs": [
+    {
+      "path": "current-master-public-vpoc-replay.patch",
+      "sha256": "6f0bb08267787c0ebc03b62a460d58d6b1bad352c9dc9341b78e7daca3c8e2ca",
+      "stable_patch_id": "550f9e18be8b5de21ff3afc7c9a1258706e8743b",
+      "role": "Local replay of the public proposal on the pinned current master source for hosted testing."
+    },
+    {
+      "path": "0001-libpq-define-SSL_LIBRARY-without-SSL.diff",
+      "sha256": "a1fe5ae7794d5fabbfafa61497a1db702d826115115847c794e688d6fab2f707",
+      "stable_patch_id": "3d181bbb91992ab709488f064eb08988c18638fe",
+      "source_attachment_sha256": "989283d60eba8d73ee50396f396b223406da676436cca83b0ae619bfd038e813",
+      "role": "Normalized diff from the follow-up patch. Its stable patch ID matches the source attachment; the email headers and sender address are excluded from this public test input."
+    }
+  ],
+  "scope": "Hosted native Windows x64 and ARM64 no-SSL baseline reproduction and corrected server build. The test checks provider-name macro selection only; it does not run SSL providers or establish full LibreSSL compatibility."
+}
