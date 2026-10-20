@@ -1,6 +1,9 @@
 name: CF7300 Meson v4 follow-up patches
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - meson-followups-20261020
 permissions:
   contents: read
 concurrency:
