@@ -26,7 +26,7 @@ try {
  $taskDeps=Join-Path $env:RUNNER_TEMP 'meson-followup-dependencies'
  New-Item -ItemType Directory -Path $taskDeps | Out-Null
  $taskPkgArchive=Join-Path $taskDeps 'pkgconf.pkg.tar.zst'
- Invoke-WebRequest -Uri 'https://mirror.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-pkgconf-1~3.0.7-2-any.pkg.tar.zst' -OutFile $taskPkgArchive
+ Invoke-WebRequest -Uri 'https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-pkgconf-1~3.0.7-2-any.pkg.tar.zst' -OutFile $taskPkgArchive -SkipHttpErrorCheck
  if ((Get-FileHash -LiteralPath $taskPkgArchive -Algorithm SHA256).Hash -ne '754CEB500A1289DC78BFD45E26E2098414D1DCCF817ABDC4B9537693F8595AC0') {throw 'pkgconf archive hash differs'}
  & tar -xf $taskPkgArchive -C $taskDeps
  if ($LASTEXITCODE -ne 0) {throw 'pkgconf extraction failed'}
@@ -34,7 +34,7 @@ try {
  & $taskPkg --version
  if ($LASTEXITCODE -ne 0) {throw 'pkgconf not runnable'}
  $taskFlexArchive=Join-Path $taskDeps 'winflex.zip'
- Invoke-WebRequest -Uri 'https://github.com/lexxmark/winflexbison/releases/download/v2.5.25/win_flex_bison-2.5.25.zip' -OutFile $taskFlexArchive
+ Invoke-WebRequest -Uri 'https://github.com/lexxmark/winflexbison/releases/download/v2.5.25/win_flex_bison-2.5.25.zip' -OutFile $taskFlexArchive -SkipHttpErrorCheck
  if ((Get-FileHash -LiteralPath $taskFlexArchive -Algorithm SHA256).Hash -ne '8D324B62BE33604B2C45AD1DD34AB93D722534448F55A16CA7292DE32B6AC135') {throw 'WinFlexBison hash differs'}
  Expand-Archive -LiteralPath $taskFlexArchive -DestinationPath (Join-Path $taskDeps 'winflex')
  $env:PATH="$(Join-Path $taskDeps 'winflex');$taskDeps/ucrt64/bin;$env:PATH"
