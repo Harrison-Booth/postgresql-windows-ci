@@ -43,6 +43,10 @@ try {
 
  & git -C $taskPostgres worktree add --detach $taskBaseline $taskManifest.source_base
  if ($LASTEXITCODE -ne 0) {throw 'Baseline worktree creation failed'}
+ & git -C $taskPostgres config user.name 'PostgreSQL Windows CI'
+ if ($LASTEXITCODE -ne 0) {throw 'Could not set the isolated CI commit name'}
+ & git -C $taskPostgres config user.email 'postgresql-windows-ci@users.noreply.github.com'
+ if ($LASTEXITCODE -ne 0) {throw 'Could not set the isolated CI commit email'}
  $taskPrerequisite=Join-Path $taskInput $taskManifest.prerequisite.file
  & git -C $taskBaseline am $taskPrerequisite
  if ($LASTEXITCODE -ne 0) {throw 'The formatted public v4 prerequisite did not apply with git am'}
