@@ -1,17 +1,16 @@
-From 02061da1b7520548c0bc4cdbf90e4b1c7275d28b Mon Sep 17 00:00:00 2001
-From: Harrison Booth <harrisontbooth@gmail.com>
-Date: Sat, 17 Oct 2026 09:14:27 -0500
-Subject: [PATCH] Keep external include flags after PostgreSQL headers and in
- fallback probes
+From 1ea237e0566c419bc00a06c092a8b853abf6d922 Mon Sep 17 00:00:00 2001
+From: PostgreSQL Patch Verification
+ <postgresql-patch-verification@users.noreply.github.com>
+Date: Tue, 20 Oct 2026 10:49:35 -0500
+Subject: [PATCH] Keep external include flags after PostgreSQL headers
 
-Focused follow-up after Aidar Imamov CF7300 v4. Based on Andres Freund extra_include_dirs prototype and Thomas Munro include-order discussion. Retains author v4 export implementation; excludes competing exporter, ICU discovery and LLVM extension-interface changes. No runtime claim from packaging.
 ---
- meson.build             | 39 ++++++++++++++++++++++++++++++++-------
+ meson.build             | 41 ++++++++++++++++++++++++++++++++++-------
  src/include/meson.build |  6 ++++--
- 2 files changed, 36 insertions(+), 9 deletions(-)
+ 2 files changed, 38 insertions(+), 9 deletions(-)
 
 diff --git a/meson.build b/meson.build
-index 6bf91cc..b23e42a 100644
+index 6bf91cc..2fc2782 100644
 --- a/meson.build
 +++ b/meson.build
 @@ -115,7 +115,6 @@ endif
@@ -22,7 +21,7 @@ index 6bf91cc..b23e42a 100644
  
  postgres_lib_d = get_option('extra_lib_dirs')
  
-@@ -390,6 +389,24 @@ else
+@@ -390,6 +389,26 @@ else
    error('unknown host system: @0@'.format(host_system))
  endif
  
@@ -41,13 +40,15 @@ index 6bf91cc..b23e42a 100644
 +pgxs_extra_include_args = []
 +foreach extra_dir : get_option('extra_include_dirs')
 +  extra_include_args += '-I@0@'.format(extra_dir)
-+  pgxs_extra_include_args += '-I' + '\\ '.join(extra_dir.replace('\\', '/').split(' '))
++  normalized_extra_dir = '/'.join(extra_dir.split('\\'))
++  pgxs_extra_include_args += '-I' + '\\ '.join(
++    normalized_extra_dir.split(' '))
 +endforeach
 +
  
  
  ###############################################################
-@@ -676,7 +693,7 @@ endif
+@@ -676,7 +695,7 @@ endif
  
  postgres_inc = [include_directories(postgres_inc_d)]
  test_lib_d = postgres_lib_d
@@ -56,7 +57,7 @@ index 6bf91cc..b23e42a 100644
  
  
  
-@@ -856,7 +873,8 @@ else
+@@ -856,7 +875,8 @@ else
    # installed
    if not ldap.found()
      ldap = cc.find_library('ldap', required: ldapopt, dirs: test_lib_d,
@@ -66,7 +67,7 @@ index 6bf91cc..b23e42a 100644
  
      # The separate ldap_r library only exists in OpenLDAP < 2.5, and if we
      # have 2.5 or later, we shouldn't even probe for ldap_r (we might find a
-@@ -871,7 +889,8 @@ else
+@@ -871,7 +891,8 @@ else
  
        # Use ldap_r for FE if available, else assume ldap is thread-safe.
        ldap_r = cc.find_library('ldap_r', required: false, dirs: test_lib_d,
@@ -76,7 +77,7 @@ index 6bf91cc..b23e42a 100644
        if not ldap_r.found()
          ldap_r = ldap
        else
-@@ -1644,6 +1663,7 @@ if sslopt in ['auto', 'openssl']
+@@ -1644,6 +1665,7 @@ if sslopt in ['auto', 'openssl']
    if not ssl.found()
      ssl_lib = cc.find_library('ssl',
        dirs: test_lib_d,
@@ -84,7 +85,7 @@ index 6bf91cc..b23e42a 100644
        header_include_directories: postgres_inc,
        has_headers: ['openssl/ssl.h', 'openssl/err.h'],
        required: openssl_required)
-@@ -1746,12 +1766,14 @@ if uuidopt != 'none'
+@@ -1746,12 +1768,14 @@ if uuidopt != 'none'
      if not uuid.found()
        uuid = cc.find_library('ossp-uuid',
          required: false, dirs: test_lib_d,
@@ -101,7 +102,7 @@ index 6bf91cc..b23e42a 100644
      endif
    else
      error('unknown uuid build option value: @0@'.format(uuidopt))
-@@ -3333,6 +3355,7 @@ if not nlsopt.disabled()
+@@ -3333,6 +3357,7 @@ if not nlsopt.disabled()
      else
        libintl = cc.find_library('intl',
          has_headers: ['libintl.h'], required: nlsopt,
@@ -109,7 +110,7 @@ index 6bf91cc..b23e42a 100644
          header_include_directories: postgres_inc,
          dirs: test_lib_d)
      endif
-@@ -3445,9 +3468,11 @@ endforeach
+@@ -3445,9 +3470,11 @@ endforeach
  # can add further args directly, or indirectly via dependencies
  add_project_arguments(cflags, language: ['c'])
  add_project_arguments(cppflags, language: ['c'])
@@ -121,7 +122,7 @@ index 6bf91cc..b23e42a 100644
  add_project_arguments(cxxflags_warn, language: ['cpp'])
  add_project_link_arguments(ldflags, language: ['c', 'cpp'])
  
-@@ -4378,7 +4403,7 @@ summary(
+@@ -4378,7 +4405,7 @@ summary(
  
  summary(
    {
@@ -150,6 +151,3 @@ index 3791539..df3c09e 100644
  var_cflags_sl = ' '.join(cc.get_supported_arguments('-fPIC'))
  # explicitly add -Wl,--as-needed, normally added by meson, but we want it for
  # PGXS compatibility
--- 
-2.53.0.windows.2
-

@@ -17,20 +17,23 @@
       "purpose": "Handle CMake include-directory results returned as either strings or arrays, and escape spaces in exported include flags."
     },
     {
-      "file": "0002-Keep-external-include-flags-after-PostgreSQL-headers-reviewed-v2.patch",
-      "sha256": "15ff63a9e3adf541b74855a1230e8b8e6fb6e90d674b5813d5f296cd4e5464e5",
-      "patch_id": "769b8735e688d3a39b0ab1bd70a0f87cd2538df9",
+      "file": "0002-Keep-external-include-flags-after-PostgreSQL-headers-reviewed-v3.patch",
+      "sha256": "a21728b7ae64e5cdf8d9dd9fd7e599e2d3653cbd48dc6a48e317d0872f809e0a",
+      "patch_id": "ab2b64dc4d3211d17e91b01a5ce30cba8c94c8d0",
       "purpose": "Keep external include flags behind PostgreSQL headers, serialize extra_include_dirs paths with spaces safely for PGXS, and pass the same include arguments to fallback header probes."
     }
   ],
   "required_order": [
     "0000-cf7300-v4-prerequisite-reformatted.patch",
     "0001-Meson-handle-CMake-include-directory-lists-and-space.patch",
-    "0002-Keep-external-include-flags-after-PostgreSQL-headers-reviewed-v2.patch"
+    "0002-Keep-external-include-flags-after-PostgreSQL-headers-reviewed-v3.patch"
   ],
   "verification": {
     "native_builds": "GitHub-hosted Windows x64 and ARM64 only",
-    "meson_versions": ["0.57.2", "1.11.2"],
+    "meson_versions": [
+      "0.57.2",
+      "1.11.2"
+    ],
     "scope": "Controlled CMake/pkg-config and extra_include_dirs include-export cases, focused Meson fallback header-argument controls, and actual psql header-order canary builds. No full server, installed extension, provider, full optional-dependency configuration, or PGXS runtime claim."
   }
 }
