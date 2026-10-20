@@ -10,7 +10,7 @@ import sys
 import time
 
 BASE = "3745790f53bc5dd87b2df3d5a0c9c62d7ff0360d"
-EXPECTED_TREE = "04b034d583bd0dc3c112e3746b2e353d96d42a27"
+EXPECTED_TREE = "790385b5edd6514e5676a8b106984099fe0807e9"
 PRODUCTION_FILES = [
     "src/backend/port/win32/socket.c",
     "src/backend/tcop/backend_startup.c",

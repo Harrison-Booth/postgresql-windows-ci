@@ -1,7 +1,7 @@
 {
   "proposal": "CF6207 socket handle inheritance",
   "upstream_base": "3745790f53bc5dd87b2df3d5a0c9c62d7ff0360d",
-  "expected_final_tree": "04b034d583bd0dc3c112e3746b2e353d96d42a27",
+  "expected_final_tree": "790385b5edd6514e5676a8b106984099fe0807e9",
   "series": [
     {
       "file": "0001-Bryan-Green-socket-original.patch",
