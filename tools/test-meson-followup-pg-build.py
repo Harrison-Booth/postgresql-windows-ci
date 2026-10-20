@@ -25,7 +25,7 @@ def main() -> int:
 
     evidence = args.workspace / "evidence" / "pg-include-order"
     evidence.mkdir(parents=True, exist_ok=False)
-    canary = args.workspace / "canary include"
+    canary = args.workspace / "canary-include"
     canary.mkdir(exist_ok=False)
     marker = "CF7300 selected external libpq-fe.h instead of the PostgreSQL header"
     (canary / "libpq-fe.h").write_text(f"#error {marker}\n", encoding="ascii")
@@ -43,7 +43,7 @@ def main() -> int:
             "-Dssl=none",
             "-Dicu=disabled",
             "-Dtap_tests=disabled",
-            f"-Dextra_include_dirs={canary.resolve().as_posix()}",
+            f"-Dextra_include_dirs={canary}",
         ]
         setup_result = run(setup, timeout=300)
         (evidence / f"{name}-setup.log").write_bytes(setup_result.stdout + setup_result.stderr)
