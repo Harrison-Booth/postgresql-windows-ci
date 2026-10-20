@@ -1,5 +1,5 @@
 {
-  "upstream_base": "776df8a6d7c42282825d658ff631509f033e8f34",
+  "upstream_base": "3745790f53bc5dd87b2df3d5a0c9c62d7ff0360d",
   "upstream_url": "https://git.postgresql.org/git/postgresql.git",
   "candidate": "Daniel Gustafsson CF7008 public LibreSSL/OpenSSL split, locally replayed for test against current master",
   "original_public_attachment": {
@@ -23,5 +23,11 @@
       "role": "Normalized diff from the follow-up patch. Its stable patch ID matches the source attachment; the email headers and sender address are excluded from this public test input."
     }
   ],
-  "scope": "Hosted native Windows x64 and ARM64 no-SSL baseline reproduction and corrected server build. The test checks provider-name macro selection only; it does not run SSL providers or establish full LibreSSL compatibility."
+  "mail_attachment": {
+    "path": "0001-libpq-define-SSL_LIBRARY-without-SSL.patch",
+    "sha256": "989283d60eba8d73ee50396f396b223406da676436cca83b0ae619bfd038e813",
+    "stable_patch_id": "3d181bbb91992ab709488f064eb08988c18638fe",
+    "author": "Harrison Booth"
+  },
+  "scope": "On current PostgreSQL master, apply the exact outgoing mail-formatted follow-up with git am, then separately replay the public CF7008 proposal and normalized equivalent follow-up to reproduce the no-SSL failure and build the corrected server on native Windows x64 and ARM64. The test checks provider-name macro selection only; it does not run SSL providers or establish full LibreSSL compatibility."
 }

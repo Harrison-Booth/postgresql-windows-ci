@@ -22,12 +22,15 @@ machine = platform.machine().lower()
 if not ((arch == "arm64" and machine in ("arm64", "aarch64")) or (arch == "x64" and machine in ("amd64", "x86_64"))):
     raise SystemExit("Native host architecture mismatch")
 
-base = "776df8a6d7c42282825d658ff631509f033e8f34"
+base = "3745790f53bc5dd87b2df3d5a0c9c62d7ff0360d"
 assert subprocess.check_output(["git", "-C", str(src), "rev-parse", "HEAD"], text=True).strip() == base
 manifest = json.loads((ci / "tracking/email-readiness-20261017/libressl/manifest.json").read_text(encoding="utf-8"))
+if manifest["upstream_base"] != base:
+    raise SystemExit("Manifest and checked-out upstream base differ")
 inputs = {entry["path"]: entry for entry in manifest["inputs"]}
 replay_patch = ci / "tracking/email-readiness-20261017/libressl/current-master-public-vpoc-replay.patch"
 followup_patch = ci / "tracking/email-readiness-20261017/libressl/0001-libpq-define-SSL_LIBRARY-without-SSL.diff"
+mail_attachment = ci / "tracking/email-readiness-20261017/libressl" / manifest["mail_attachment"]["path"]
 
 def sha256(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -46,6 +49,12 @@ for path in (replay_patch, followup_patch):
     if patch_id(path) != inputs[path.name]["stable_patch_id"]:
         raise SystemExit(f"Stable patch-id mismatch: {path.name}")
 
+mail_input = manifest["mail_attachment"]
+if sha256(mail_attachment) != mail_input["sha256"]:
+    raise SystemExit("Exact outgoing mail attachment SHA256 mismatch")
+if patch_id(mail_attachment) != mail_input["stable_patch_id"]:
+    raise SystemExit("Exact outgoing mail attachment stable patch-id mismatch")
+
 results = []
 
 def run(args, name, cwd=None):
@@ -63,6 +72,36 @@ def require_success(args, name, cwd=None):
     if code != 0:
         raise SystemExit(f"{name} failed; see {log}")
     return log
+
+# Apply the exact Gmail attachment as a mail patch on a clean current-master checkout.
+mail_application_log = require_success(
+    ["git", "-C", str(src), "-c", "user.name=PostgreSQL CI validation",
+     "-c", "user.email=ci@example.invalid", "am", "--keep-cr", str(mail_attachment)],
+    "git-am-exact-mail-attachment",
+)
+mail_head = subprocess.check_output(["git", "-C", str(src), "rev-parse", "HEAD"], text=True).strip()
+mail_tree = subprocess.check_output(["git", "-C", str(src), "rev-parse", "HEAD^{tree}"], text=True).strip()
+mail_changed = subprocess.check_output(
+    ["git", "-C", str(src), "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"],
+    text=True,
+).splitlines()
+if mail_changed != ["src/include/libpq/libpq.h"]:
+    raise SystemExit("Exact mail attachment changed unexpected files: " + repr(mail_changed))
+mail_application = {
+    "method": "git am --keep-cr",
+    "exit_code": 0,
+    "base": base,
+    "head": mail_head,
+    "tree": mail_tree,
+    "attachment_sha256": sha256(mail_attachment),
+    "patch_id": patch_id(mail_attachment),
+    "changed_files": mail_changed,
+    "log_sha256": sha256(mail_application_log),
+    "committer_identity_scope": "single git am command; attachment author preserved",
+}
+require_success(["git", "-C", str(src), "reset", "--hard", base], "restore-clean-current-master")
+if subprocess.check_output(["git", "-C", str(src), "rev-parse", "HEAD"], text=True).strip() != base:
+    raise SystemExit("Could not restore the pristine current-master checkout")
 
 # Replay the public proposal on current master, then prove the attached fix is needed.
 require_success(["git", "-C", str(src), "apply", "--check", str(replay_patch)], "check-public-replay-apply")
@@ -115,6 +154,7 @@ if pe_machine != expected_machine:
 
 record = {
     "upstream_base": base,
+    "mail_formatted_application": mail_application,
     "public_replay_sha256": sha256(replay_patch),
     "public_replay_patch_id": patch_id(replay_patch),
     "followup_diff_sha256": sha256(followup_patch),

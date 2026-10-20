@@ -4,11 +4,11 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: libressl-current-master
+  group: libressl-current-master-374579
   cancel-in-progress: false
 jobs:
   no-ssl:
-    if: ${{ github.repository == 'Harrison-Booth/postgresql-windows-ci' && !github.event.repository.private }}
+    if: ${{ github.repository == 'Harrison-Booth/postgresql-windows-ci' && !github.event.repository.private && github.ref == 'refs/heads/fix/libressl-currentmaster-374579' }}
     strategy:
       fail-fast: false
       max-parallel: 1
@@ -28,7 +28,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           repository: postgres/postgres
-          ref: 776df8a6d7c42282825d658ff631509f033e8f34
+          ref: 3745790f53bc5dd87b2df3d5a0c9c62d7ff0360d
           path: postgres
           persist-credentials: false
       - uses: actions/setup-python@v6
