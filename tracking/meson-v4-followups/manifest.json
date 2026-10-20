@@ -1,6 +1,6 @@
 {
-  "source_base": "b536d5a0bd7a0e35c3168f3022183f37cb5c2058",
-  "base_ref": "postgres/postgres master at b536d5a0bd7a0e35c3168f3022183f37cb5c2058",
+  "source_base": "3745790f53bc5dd87b2df3d5a0c9c62d7ff0360d",
+  "base_ref": "postgres/postgres master at 3745790f53bc5dd87b2df3d5a0c9c62d7ff0360d",
   "prerequisite": {
     "file": "0000-cf7300-v4-prerequisite-reformatted.patch",
     "sha256": "e208d6415e5167d090b7b943168293c6379d7e679a26cf44729e15d80dc3702f",
