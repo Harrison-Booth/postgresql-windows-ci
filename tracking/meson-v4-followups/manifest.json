@@ -17,16 +17,16 @@
       "purpose": "Handle CMake include-directory results returned as either strings or arrays, and escape spaces in exported include flags."
     },
     {
-      "file": "0002-Meson-keep-external-include-flags-after-PostgreSQL-headers-v4.patch",
-      "sha256": "1e10a60e8acf05490d9edf84cbda10a7d1f1b166bcd6a9b0a56a0e8d4361c960",
-      "patch_id": "ab2b64dc4d3211d17e91b01a5ce30cba8c94c8d0",
-      "purpose": "Keep external include flags behind PostgreSQL headers, serialize extra_include_dirs paths containing spaces for PGXS, and pass the same include arguments to fallback header probes. General Make/shell metacharacter serialization is not claimed."
+      "file": "0002-Meson-keep-external-include-flags-after-PostgreSQL-headers-v6.patch",
+      "sha256": "414ad6aaffdbd016ba718073fe990009e9ad994fc1132a6d10238cea2bd5c20a",
+      "patch_id": "02877ad57fb039814ab9acf4ac557103da8bdf49",
+      "purpose": "Keep PostgreSQL headers ahead of extra_include_dirs, pass those directories to all six fallback header probes, and export paths containing spaces for PGXS and pg_config. Based on Andres Freund's CF6056 prototype and Thomas Munro's comments; general Make/shell metacharacter serialization is not claimed."
     }
   ],
   "required_order": [
     "0000-cf7300-v4-prerequisite-reformatted.patch",
     "0001-Meson-handle-CMake-include-directory-lists-and-space.patch",
-    "0002-Meson-keep-external-include-flags-after-PostgreSQL-headers-v4.patch"
+    "0002-Meson-keep-external-include-flags-after-PostgreSQL-headers-v6.patch"
   ],
   "verification": {
     "native_builds": "GitHub-hosted Windows x64 and ARM64 only",
