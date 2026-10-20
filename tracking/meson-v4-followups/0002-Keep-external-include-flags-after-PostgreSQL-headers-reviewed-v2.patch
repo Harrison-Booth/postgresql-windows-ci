@@ -1,0 +1,155 @@
+From 02061da1b7520548c0bc4cdbf90e4b1c7275d28b Mon Sep 17 00:00:00 2001
+From: Harrison Booth <harrisontbooth@gmail.com>
+Date: Sat, 17 Oct 2026 09:14:27 -0500
+Subject: [PATCH] Keep external include flags after PostgreSQL headers and in
+ fallback probes
+
+Focused follow-up after Aidar Imamov CF7300 v4. Based on Andres Freund extra_include_dirs prototype and Thomas Munro include-order discussion. Retains author v4 export implementation; excludes competing exporter, ICU discovery and LLVM extension-interface changes. No runtime claim from packaging.
+---
+ meson.build             | 39 ++++++++++++++++++++++++++++++++-------
+ src/include/meson.build |  6 ++++--
+ 2 files changed, 36 insertions(+), 9 deletions(-)
+
+diff --git a/meson.build b/meson.build
+index 6bf91cc..b23e42a 100644
+--- a/meson.build
++++ b/meson.build
+@@ -115,7 +115,6 @@ endif
+ ###############################################################
+ 
+ postgres_inc_d = ['src/include']
+-postgres_inc_d += get_option('extra_include_dirs')
+ 
+ postgres_lib_d = get_option('extra_lib_dirs')
+ 
+@@ -390,6 +389,24 @@ else
+   error('unknown host system: @0@'.format(host_system))
+ endif
+ 
++# While the most obvious way to implement extra_include_dirs would be to add
++# extra_include_dirs to postgres_inc_d, that turns out to not work well: For
++# some parts of the buildtree (e.g. src/interfaces/libpq or tools linking
++# against libpq) we need to add additional directories to be included, and
++# those directories need to take precedence over extra_include_dirs.
++# Pass extra include directories as project arguments. Meson adds project
++# arguments after explicit include_directories.
++#
++# An additional advantage is that this way the extra include directories are
++# included in pg_config --cppflags output, keeping the behavior consistent
++# with autoconf builds.
++extra_include_args = []
++pgxs_extra_include_args = []
++foreach extra_dir : get_option('extra_include_dirs')
++  extra_include_args += '-I@0@'.format(extra_dir)
++  pgxs_extra_include_args += '-I' + '\\ '.join(extra_dir.replace('\\', '/').split(' '))
++endforeach
++
+ 
+ 
+ ###############################################################
+@@ -676,7 +693,7 @@ endif
+ 
+ postgres_inc = [include_directories(postgres_inc_d)]
+ test_lib_d = postgres_lib_d
+-test_c_args = cppflags + cflags
++test_c_args = cppflags + extra_include_args + cflags
+ 
+ 
+ 
+@@ -856,7 +873,8 @@ else
+   # installed
+   if not ldap.found()
+     ldap = cc.find_library('ldap', required: ldapopt, dirs: test_lib_d,
+-      has_headers: 'ldap.h', header_include_directories: postgres_inc)
++      has_headers: 'ldap.h', header_args: test_c_args,
++      header_include_directories: postgres_inc)
+ 
+     # The separate ldap_r library only exists in OpenLDAP < 2.5, and if we
+     # have 2.5 or later, we shouldn't even probe for ldap_r (we might find a
+@@ -871,7 +889,8 @@ else
+ 
+       # Use ldap_r for FE if available, else assume ldap is thread-safe.
+       ldap_r = cc.find_library('ldap_r', required: false, dirs: test_lib_d,
+-        has_headers: 'ldap.h', header_include_directories: postgres_inc)
++        has_headers: 'ldap.h', header_args: test_c_args,
++        header_include_directories: postgres_inc)
+       if not ldap_r.found()
+         ldap_r = ldap
+       else
+@@ -1644,6 +1663,7 @@ if sslopt in ['auto', 'openssl']
+   if not ssl.found()
+     ssl_lib = cc.find_library('ssl',
+       dirs: test_lib_d,
++      header_args: test_c_args,
+       header_include_directories: postgres_inc,
+       has_headers: ['openssl/ssl.h', 'openssl/err.h'],
+       required: openssl_required)
+@@ -1746,12 +1766,14 @@ if uuidopt != 'none'
+     if not uuid.found()
+       uuid = cc.find_library('ossp-uuid',
+         required: false, dirs: test_lib_d,
+-        has_headers: uuidheader, header_include_directories: postgres_inc)
++        has_headers: uuidheader, header_args: test_c_args,
++        header_include_directories: postgres_inc)
+     endif
+     if not uuid.found()
+       uuid = cc.find_library('uuid',
+         required: true, dirs: test_lib_d,
+-        has_headers: uuidheader, header_include_directories: postgres_inc)
++        has_headers: uuidheader, header_args: test_c_args,
++        header_include_directories: postgres_inc)
+     endif
+   else
+     error('unknown uuid build option value: @0@'.format(uuidopt))
+@@ -3333,6 +3355,7 @@ if not nlsopt.disabled()
+     else
+       libintl = cc.find_library('intl',
+         has_headers: ['libintl.h'], required: nlsopt,
++        header_args: test_c_args,
+         header_include_directories: postgres_inc,
+         dirs: test_lib_d)
+     endif
+@@ -3445,9 +3468,11 @@ endforeach
+ # can add further args directly, or indirectly via dependencies
+ add_project_arguments(cflags, language: ['c'])
+ add_project_arguments(cppflags, language: ['c'])
++add_project_arguments(extra_include_args, language: ['c'])
+ add_project_arguments(cflags_warn, language: ['c'])
+ add_project_arguments(cxxflags, language: ['cpp'])
+ add_project_arguments(cppflags, language: ['cpp'])
++add_project_arguments(extra_include_args, language: ['cpp'])
+ add_project_arguments(cxxflags_warn, language: ['cpp'])
+ add_project_link_arguments(ldflags, language: ['c', 'cpp'])
+ 
+@@ -4378,7 +4403,7 @@ summary(
+ 
+ summary(
+   {
+-    'CPP FLAGS': ' '.join(cppflags),
++    'CPP FLAGS': ' '.join(cppflags + extra_include_args),
+     'C FLAGS, functional': ' '.join(cflags),
+     'C FLAGS, warnings': ' '.join(cflags_warn),
+     'C FLAGS, modules': ' '.join(cflags_mod),
+diff --git a/src/include/meson.build b/src/include/meson.build
+index 3791539..df3c09e 100644
+--- a/src/include/meson.build
++++ b/src/include/meson.build
+@@ -47,11 +47,13 @@ else
+   var_cxx = 'g++'
+   var_cxxflags = ''
+ endif
+-var_cppflags = ' '.join(cppflags + pgxs_dep_cflags['openssl'])
++var_cppflags = ' '.join(
++  cppflags + pgxs_extra_include_args + pgxs_dep_cflags['openssl'])
+ # pg_config --cppflags also includes ICU_CFLAGS, as with autoconf, where
+ # Makefile.global adds $(ICU_CFLAGS) to CPPFLAGS
+ var_cppflags_pg_config = ' '.join(
+-  cppflags + pgxs_dep_cflags['openssl'] + pgxs_dep_cflags['icu'])
++  cppflags + pgxs_extra_include_args + pgxs_dep_cflags['openssl'] +
++  pgxs_dep_cflags['icu'])
+ var_cflags_sl = ' '.join(cc.get_supported_arguments('-fPIC'))
+ # explicitly add -Wl,--as-needed, normally added by meson, but we want it for
+ # PGXS compatibility
+-- 
+2.53.0.windows.2
+

@@ -66,7 +66,7 @@ def main() -> int:
         receipt = {
             "harness_exit": proc.returncode,
             "failures": ["The controlled harness did not produce its results file; inspect saved stdout and stderr."],
-            "scope": "Six controlled CMake/pkg-config include-export cases. No full server or PGXS runtime claim.",
+            "scope": "Seven controlled include-export cases, including extra_include_dirs with spaces. No full server or PGXS runtime claim.",
         }
         (args.output / "strict-verification.json").write_text(
             json.dumps(receipt, indent=2) + "\n", encoding="utf-8"
@@ -79,11 +79,12 @@ def main() -> int:
         "pkgconfig",
         "pkgconfig-space",
         "pkgconfig-override",
+        "extra-include-space",
         "cmake",
         "cmake-space",
     }
     if {row["case"] for row in rows} != expected_cases or len(rows) != len(expected_cases):
-        raise RuntimeError("The expected six include-export cases did not run")
+        raise RuntimeError("The expected seven include-export cases did not run")
 
     failures = []
     for row in rows:
@@ -98,8 +99,22 @@ def main() -> int:
         for key in ("macro_compile_exit", "macro_runtime_exit"):
             if row.get(key) != 0:
                 failures.append(f"{case}: {key}={row.get(key)}")
-        if case != "disabled" and row.get("exported_header_compile_exit") != 0:
+        if case not in ("disabled", "extra-include-space") and row.get("exported_header_compile_exit") != 0:
             failures.append(f"{case}: exported_header_compile_exit={row.get('exported_header_compile_exit')}")
+        if case == "extra-include-space":
+            for key in (
+                "extra_include_export_matches",
+                "pg_config_macro_roundtrip",
+            ):
+                if row.get(key) is not True:
+                    failures.append(f"{case}: {key}={row.get(key)}")
+            for key in (
+                "extra_include_compiler_build_exit",
+                "exported_extra_include_compile_exit",
+                "makefile_cppflags_extra_compile_exit",
+            ):
+                if row.get(key) != 0:
+                    failures.append(f"{case}: {key}={row.get(key)}")
         if row.get("pg_config_macro_roundtrip") is not True:
             failures.append(f"{case}: pg_config include flags did not survive the compiler macro round trip")
 
@@ -116,7 +131,7 @@ def main() -> int:
         ],
         "cases": rows,
         "failures": failures,
-        "scope": "Six controlled CMake/pkg-config include-export cases, including arrays, spaces, and pkg-config path override. No full server or PGXS runtime claim.",
+        "scope": "Seven controlled include-export cases covering CMake/pkg-config arrays and spaces, pkg-config path override, and extra_include_dirs with spaces. Both serialized flag forms are parsed and compiled as native compiler arguments. No full server or PGXS runtime claim.",
     }
     (args.output / "strict-verification.json").write_text(
         json.dumps(receipt, indent=2) + "\n", encoding="utf-8"

@@ -67,6 +67,8 @@ try {
   "import sys; sys.path.insert(0, r'$taskToolRoot'); from mesonbuild.mesonmain import main; raise SystemExit(main())" | Set-Content -LiteralPath $taskLauncher -Encoding utf8
   & python (Join-Path $PSScriptRoot 'test-meson-followup-export.py') --source $taskPostgres --manifest (Join-Path $taskInput 'manifest.json') --meson $taskLauncher --pkgconfig $taskPkg --output (Join-Path $taskEvidence "export-$taskVersion")
   if ($LASTEXITCODE -ne 0) {throw "Export configuration fixture failed under Meson $taskVersion; preserve logs"}
+  & python (Join-Path $PSScriptRoot 'test-meson-followup-header-args.py') --workspace $taskWorkspace --meson $taskLauncher --version $taskVersion --source $taskPostgres
+  if ($LASTEXITCODE -ne 0) {throw "Fallback header-argument probes failed under Meson $taskVersion; preserve logs"}
   if ($taskVersion -eq '1.11.2') { $taskBuildMeson=$taskLauncher }
  }
  & python (Join-Path $PSScriptRoot 'test-meson-followup-pg-build.py') --workspace $taskWorkspace --architecture $Architecture --meson $taskBuildMeson --baseline $taskBaseline --candidate $taskPostgres
@@ -81,7 +83,7 @@ try {
   prerequisite_sha256=$taskManifest.prerequisite.sha256
   followup_sha256=@($taskManifest.followups | ForEach-Object {$_.sha256})
   meson_versions=@('0.57.2','1.11.2')
-  scope='Exact ordered git-am series, controlled CMake/pkg-config include export cases, and actual psql header-order canary builds. No full server, installed extension, provider, or PGXS runtime claim.'
+  scope='Exact ordered git-am series, controlled CMake/pkg-config and extra_include_dirs export cases, focused fallback header probes, and actual psql header-order canary builds. No full server, installed extension, provider, or PGXS runtime claim.'
  }
  $taskReceipt | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $taskEvidence 'completion.json') -Encoding utf8
 } finally {Stop-Transcript}

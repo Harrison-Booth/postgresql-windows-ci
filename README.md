@@ -10,6 +10,10 @@ Workflows are manual, use read-only repository permissions, run one architecture
 
 This repository excludes email drafts, mailbox exports, private tracking records, private repository history and unapproved contribution revisions. Any future test inputs need explicit provenance and a publication review. PostgreSQL and downloaded tools retain their upstream licenses.
 
+## CF7300 Meson v4 follow-up checks
+
+The `meson-v4-followups` workflow is a manual check for the reviewed branch. It applies Aidar Imamov's public v4 prerequisite and the two listed follow-up patches in order, then checks Meson 0.57.2 and 1.11.2 on standard Windows x64 and ARM64 runners. It covers include-flag exports, focused optional-header probes and a `psql` header-selection canary. It does not build a full server or installed PGXS extension, and a passing run does not establish upstream acceptance.
+
 ## Experimental LLVM verification
 
 The manual LLVM workflow reconstructs pinned PostgreSQL and LLVM sources from

@@ -1,9 +1,6 @@
 name: CF7300 Meson v4 follow-up patches
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - meson-followups-20261020
 permissions:
   contents: read
 concurrency:
@@ -11,7 +8,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   review:
-    if: ${{ github.repository == 'Harrison-Booth/postgresql-windows-ci' && !github.event.repository.private }}
+    if: ${{ github.repository == 'Harrison-Booth/postgresql-windows-ci' && !github.event.repository.private && github.ref == 'refs/heads/meson-followups-20261020' }}
     strategy:
       fail-fast: false
       max-parallel: 1
@@ -22,20 +19,20 @@ jobs:
           - runner: windows-11-arm
             arch: arm64
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 55
+    timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           path: ci
           persist-credentials: false
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           repository: postgres/postgres
           ref: e75fcc9867fdfe295957ad5c9a98cbe2e1b4c5c3
           path: postgres
           persist-credentials: false
           fetch-depth: 1
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.13'
           architecture: ${{ matrix.arch }}
