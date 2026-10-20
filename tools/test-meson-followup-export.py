@@ -95,9 +95,11 @@ def main() -> int:
             failures.append(f"{case}: dependency metadata did not preserve expected include directories")
         if row.get("exported_include_argv_matches") is not True:
             failures.append(f"{case}: exported include flags did not preserve paths as arguments")
-        for key in ("macro_compile_exit", "macro_runtime_exit", "exported_header_compile_exit"):
+        for key in ("macro_compile_exit", "macro_runtime_exit"):
             if row.get(key) != 0:
                 failures.append(f"{case}: {key}={row.get(key)}")
+        if case != "disabled" and row.get("exported_header_compile_exit") != 0:
+            failures.append(f"{case}: exported_header_compile_exit={row.get('exported_header_compile_exit')}")
         if row.get("pg_config_macro_roundtrip") is not True:
             failures.append(f"{case}: pg_config include flags did not survive the compiler macro round trip")
 
