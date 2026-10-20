@@ -4,3 +4,5 @@
 *.c -text
 *.sh text eol=lf
 *.yml text eol=lf
+
+tracking/email-readiness-20261017/libressl/*.diff -text
