@@ -166,9 +166,20 @@ def main():
         "commands": [],
     }
     try:
+        # git am preserves the patch author but also needs an identity for the
+        # temporary committer. Set it for this command only; do not modify the
+        # hosted runner's global Git configuration.
         applied = command("git-am-exact-series",
-                          ["git", "-C", source, "am", "--keep-cr", *patches],
+                          ["git", "-C", source,
+                           "-c", "user.name=PostgreSQL CI validation",
+                           "-c", "user.email=ci@example.invalid",
+                           "am", "--keep-cr", *patches],
                           evidence / "git-am.log", timeout=120)
+        receipt["git_am_committer_identity"] = {
+            "name": "PostgreSQL CI validation",
+            "email": "ci@example.invalid",
+            "scope": "single git am command; patch authors preserved",
+        }
         head = subprocess.check_output(["git", "-C", source, "rev-parse", "HEAD"], text=True).strip()
         tree = subprocess.check_output(["git", "-C", source, "rev-parse", "HEAD^{tree}"], text=True).strip()
         if tree != EXPECTED_TREE:
