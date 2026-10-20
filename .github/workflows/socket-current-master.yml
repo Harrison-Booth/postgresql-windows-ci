@@ -1,0 +1,81 @@
+name: CF6207 socket inheritance current-master review
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: socket-inheritance-current-master
+  cancel-in-progress: false
+jobs:
+  x64:
+    if: github.repository == 'Harrison-Booth/postgresql-windows-ci' && !github.event.repository.private
+    runs-on: windows-2022
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          path: ci
+          persist-credentials: false
+      - uses: actions/checkout@v6
+        with:
+          repository: postgres/postgres
+          ref: 776df8a6d7c42282825d658ff631509f033e8f34
+          path: postgres
+          persist-credentials: false
+          fetch-depth: 1
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+          architecture: x64
+      - name: Build and test the exact socket series
+        shell: pwsh
+        env:
+          TEST_HOST_ARCH: x64
+        run: ./ci/tools/socket-current-master-check.ps1
+      - name: Preserve results, including expected baseline failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: socket-current-master-x64
+          path: |
+            evidence/
+            build/meson-logs/
+            build/testrun/pg_ctl/
+          if-no-files-found: warn
+          retention-days: 7
+  arm64:
+    if: github.repository == 'Harrison-Booth/postgresql-windows-ci' && !github.event.repository.private
+    runs-on: windows-11-arm
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          path: ci
+          persist-credentials: false
+      - uses: actions/checkout@v6
+        with:
+          repository: postgres/postgres
+          ref: 776df8a6d7c42282825d658ff631509f033e8f34
+          path: postgres
+          persist-credentials: false
+          fetch-depth: 1
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+          architecture: arm64
+      - name: Build and test the exact socket series
+        shell: pwsh
+        env:
+          TEST_HOST_ARCH: arm64
+        run: ./ci/tools/socket-current-master-check.ps1
+      - name: Preserve results, including expected baseline failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: socket-current-master-arm64
+          path: |
+            evidence/
+            build/meson-logs/
+            build/testrun/pg_ctl/
+          if-no-files-found: warn
+          retention-days: 7

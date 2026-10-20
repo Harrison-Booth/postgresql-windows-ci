@@ -1,0 +1,20 @@
+{
+  "proposal": "CF6207 socket handle inheritance",
+  "upstream_base": "776df8a6d7c42282825d658ff631509f033e8f34",
+  "expected_final_tree": "d1ed458cd5faee39a92c58e9bedb5828e3d333a3",
+  "series": [
+    {
+      "file": "0001-Bryan-Green-socket-original.patch",
+      "author": "Bryan Green",
+      "sha256": "b9e74c5ae3e55a60c2716d122caaedd79bb2f023d5bd72809c400cb19d6efa98",
+      "stable_patch_id": "0b5a43071bfde632c3eae9b6b7d0da26aba00273"
+    },
+    {
+      "file": "0002-socket-inheritance-regression-supplement.patch",
+      "author": "Harrison Booth",
+      "sha256": "454720cee6281df1a25df2113a5ae7f36815c24686338a7c42098662376217e8",
+      "stable_patch_id": "cba911a70cdef9cd05c6c4ce526c30600aa82510"
+    }
+  ],
+  "scope": "Apply the exact public proposal and its Windows TAP test supplement to current master. On native x64 and ARM64, build and run only pg_ctl/005_socket_handle_inheritance. A test-only baseline control omits the two production socket changes and must fail only the two socket-lifetime assertions. This is not a full regression-suite or Job Objects test."
+}
