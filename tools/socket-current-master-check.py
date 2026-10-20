@@ -9,7 +9,7 @@ import subprocess
 import sys
 import time
 
-BASE = "1999fe227df70249dce7c9037147b54c1090b4ad"
+BASE = "68af68ac691f2b57d29524a191debed9b0bdd558"
 PRODUCTION_FILES = [
     "src/backend/port/win32/socket.c",
     "src/backend/tcop/backend_startup.c",
