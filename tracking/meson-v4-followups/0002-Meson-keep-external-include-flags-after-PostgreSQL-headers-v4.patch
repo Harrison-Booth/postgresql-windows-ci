@@ -1,9 +1,11 @@
-From 1ea237e0566c419bc00a06c092a8b853abf6d922 Mon Sep 17 00:00:00 2001
-From: PostgreSQL Patch Verification
- <postgresql-patch-verification@users.noreply.github.com>
+From 783af2cad0dd56028efb7d45947d14e0220bcd2c Mon Sep 17 00:00:00 2001
+From: Harrison Booth <harrisontbooth@gmail.com>
 Date: Tue, 20 Oct 2026 10:49:35 -0500
-Subject: [PATCH] Keep external include flags after PostgreSQL headers
+Subject: [PATCH 2/2] Keep external include flags after PostgreSQL headers
 
+Pass extra_include_dirs as project arguments so explicit PostgreSQL source headers remain ahead of external include paths. Include those arguments in the six find_library() header probes, which otherwise would not see project arguments.
+
+Export extra_include_dirs to PGXS and pg_config flags, normalizing Windows separators and escaping spaces. The focused export coverage is for paths containing spaces; this patch does not claim general Make or shell metacharacter serialization.
 ---
  meson.build             | 41 ++++++++++++++++++++++++++++++++++-------
  src/include/meson.build |  6 ++++--
@@ -151,3 +153,6 @@ index 3791539..df3c09e 100644
  var_cflags_sl = ' '.join(cc.get_supported_arguments('-fPIC'))
  # explicitly add -Wl,--as-needed, normally added by meson, but we want it for
  # PGXS compatibility
+-- 
+2.53.0.windows.2
+

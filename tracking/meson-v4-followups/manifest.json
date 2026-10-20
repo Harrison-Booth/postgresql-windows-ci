@@ -17,16 +17,16 @@
       "purpose": "Handle CMake include-directory results returned as either strings or arrays, and escape spaces in exported include flags."
     },
     {
-      "file": "0002-Keep-external-include-flags-after-PostgreSQL-headers-reviewed-v3.patch",
-      "sha256": "a21728b7ae64e5cdf8d9dd9fd7e599e2d3653cbd48dc6a48e317d0872f809e0a",
+      "file": "0002-Meson-keep-external-include-flags-after-PostgreSQL-headers-v4.patch",
+      "sha256": "1e10a60e8acf05490d9edf84cbda10a7d1f1b166bcd6a9b0a56a0e8d4361c960",
       "patch_id": "ab2b64dc4d3211d17e91b01a5ce30cba8c94c8d0",
-      "purpose": "Keep external include flags behind PostgreSQL headers, serialize extra_include_dirs paths with spaces safely for PGXS, and pass the same include arguments to fallback header probes."
+      "purpose": "Keep external include flags behind PostgreSQL headers, serialize extra_include_dirs paths containing spaces for PGXS, and pass the same include arguments to fallback header probes. General Make/shell metacharacter serialization is not claimed."
     }
   ],
   "required_order": [
     "0000-cf7300-v4-prerequisite-reformatted.patch",
     "0001-Meson-handle-CMake-include-directory-lists-and-space.patch",
-    "0002-Keep-external-include-flags-after-PostgreSQL-headers-reviewed-v3.patch"
+    "0002-Meson-keep-external-include-flags-after-PostgreSQL-headers-v4.patch"
   ],
   "verification": {
     "native_builds": "GitHub-hosted Windows x64 and ARM64 only",

@@ -73,7 +73,7 @@ add_project_arguments(extra_include_args, language: ['c'])
   (project/'meson.build').write_text(pre+block+extra_include_block+'\n'+exports+post,encoding='utf-8')
   (project/'flags.in').write_text('@OPENSSL@\n@ICU@\n@PG_CONFIG@\n@CPPFLAGS@\n')
   if case=='extra-include-space':
-   (project/'extra-probe.c').write_text('#include <author_extra.h>\nint probe(void){return AUTHOR_EXTRA;}\n')
+   (project/'extra-probe.c').write_text('#include <author_extra.h>\nint probe(void){return AUTHOR_EXTRA;}\nint main(void){return probe();}\n')
    with (project/'meson.build').open('a',encoding='utf-8') as f:f.write("executable('extra-compiler-probe', 'extra-probe.c')\n")
   env=os.environ.copy()
   for key in ['CC','CXX','PKG_CONFIG_PATH','PKG_CONFIG_LIBDIR','PKG_CONFIG_SYSROOT_DIR']:env.pop(key,None)
