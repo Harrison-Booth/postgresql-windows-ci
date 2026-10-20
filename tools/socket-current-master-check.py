@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import platform
 import re
+import stat
 import subprocess
 import sys
 import time
@@ -121,8 +122,23 @@ def run_setup(python, build, evidence, label):
     template = build / "tmp_install" / "initdb-template"
     if not template.is_dir() or not any(template.iterdir()):
         raise RuntimeError(label + " setup suite did not create a usable initdb template")
+    readonly = []
+    for path in template.rglob("*"):
+        if path.is_file():
+            mode = path.stat().st_mode
+            if not mode & stat.S_IWRITE:
+                os.chmod(path, mode | stat.S_IWRITE)
+                readonly.append(str(path.relative_to(template)))
+    hba = template / "pg_hba.conf"
+    if not hba.is_file():
+        raise RuntimeError(label + " initdb template has no pg_hba.conf")
+    with hba.open("r+b") as stream:
+        stream.seek(0)
+        stream.flush()
     result["initdb_template"] = str(template)
     result["initdb_template_file_count"] = sum(1 for path in template.rglob("*") if path.is_file())
+    result["readonly_files_made_writable"] = readonly
+    result["pg_hba_write_preflight"] = True
     return result
 
 
@@ -253,7 +269,7 @@ def main():
         command("restore-unpatched-socket-source",
                 ["git", "-C", source, "checkout", BASE, "--", *PRODUCTION_FILES],
                 evidence / "restore-baseline-source.log", timeout=60)
-        changed = subprocess.check_output(["git", "-C", source, "diff", "--name-only"],
+        changed = subprocess.check_output(["git", "-C", source, "diff", "HEAD", "--name-only"],
                                            text=True).splitlines()
         if sorted(changed) != sorted(PRODUCTION_FILES):
             raise RuntimeError("Baseline control changed files outside the two production hunks: " + repr(changed))
