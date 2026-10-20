@@ -79,7 +79,8 @@ def run_tap(python, build, evidence, label, expect_baseline=False):
     result = command(
         label + "-socket-tap",
         [python, "-m", "mesonbuild.mesonmain", "test", "-C", build,
-         "--print-errorlogs", "--verbose", "pg_ctl/005_socket_handle_inheritance"],
+         "--no-rebuild", "--print-errorlogs", "--verbose",
+         "pg_ctl/005_socket_handle_inheritance"],
         log, timeout=1200, allowed=(0, 1) if expect_baseline else (0,))
     testlog = build / "meson-logs" / "testlog.txt"
     if testlog.is_file():
@@ -106,6 +107,48 @@ def run_tap(python, build, evidence, label, expect_baseline=False):
         raise RuntimeError("Candidate TAP assertions failed: " + repr(failed))
     result["tap_assertions"] = results
     result["expected_baseline_failure_control"] = expect_baseline
+    return result
+
+
+def run_setup(python, build, evidence, label):
+    """Install the just-built tree and create the initdb template before TAP."""
+    log = evidence / (label + "-setup-suite.log")
+    result = command(
+        label + "-setup-suite",
+        [python, "-m", "mesonbuild.mesonmain", "test", "-C", build,
+         "--no-rebuild", "--suite", "setup", "--print-errorlogs", "--verbose"],
+        log, timeout=900)
+    template = build / "tmp_install" / "initdb-template"
+    if not template.is_dir() or not any(template.iterdir()):
+        raise RuntimeError(label + " setup suite did not create a usable initdb template")
+    result["initdb_template"] = str(template)
+    result["initdb_template_file_count"] = sum(1 for path in template.rglob("*") if path.is_file())
+    return result
+
+
+def preflight_generated_cube_sources(build, evidence):
+    """Run the two unrelated cube generators in isolation and retain commands."""
+    log = evidence / "cube-generator-preflight.log"
+    result = command(
+        "cube-generator-preflight",
+        ["ninja", "-C", build, "-v", "contrib/cube/cubeparse.c",
+         "contrib/cube/cubeparse.h", "contrib/cube/cubescan.c"],
+        log, timeout=180)
+    expected = [
+        build / "contrib" / "cube" / "cubeparse.c",
+        build / "contrib" / "cube" / "cubeparse.h",
+        build / "contrib" / "cube" / "cubescan.c",
+    ]
+    missing = [str(path) for path in expected if not path.is_file()]
+    result["declared_outputs"] = [
+        {"path": str(path), "exists": path.is_file(),
+         "size_bytes": path.stat().st_size if path.is_file() else None}
+        for path in expected
+    ]
+    (evidence / "cube-generator-outputs.json").write_text(
+        json.dumps(result["declared_outputs"], indent=2) + "\n", encoding="utf-8")
+    if missing:
+        raise RuntimeError("cube generator returned success without its declared outputs: " + repr(missing))
     return result
 
 
@@ -201,8 +244,10 @@ def main():
             "-DTAR=C:/Windows/System32/tar.exe",
         ]
         command("configure-tap-build", configure, evidence / "configure.log", timeout=600)
+        receipt["cube_generator_preflight"] = preflight_generated_cube_sources(build, evidence)
         command("build-candidate", [*meson, "compile", "-C", build, "-j", "2"],
                 evidence / "build-candidate.log", timeout=2400)
+        candidate_setup = run_setup(python, build, evidence, "candidate")
         candidate = run_tap(python, build, evidence, "candidate")
 
         command("restore-unpatched-socket-source",
@@ -214,6 +259,7 @@ def main():
             raise RuntimeError("Baseline control changed files outside the two production hunks: " + repr(changed))
         command("build-unpatched-control", [*meson, "compile", "-C", build, "-j", "2"],
                 evidence / "build-baseline.log", timeout=1200)
+        baseline_setup = run_setup(python, build, evidence, "baseline")
         baseline = run_tap(python, build, evidence, "baseline", expect_baseline=True)
 
         command("restore-candidate-socket-source",
@@ -223,8 +269,14 @@ def main():
             raise RuntimeError("Candidate source restoration did not return to a clean exact series")
         command("rebuild-candidate", [*meson, "compile", "-C", build, "-j", "2"],
                 evidence / "rebuild-candidate.log", timeout=1200)
+        final_candidate_setup = run_setup(python, build, evidence, "final-candidate")
+        final_candidate = run_tap(python, build, evidence, "final-candidate")
         receipt["candidate_test"] = candidate
+        receipt["candidate_setup"] = candidate_setup
         receipt["baseline_control"] = baseline
+        receipt["baseline_setup"] = baseline_setup
+        receipt["final_candidate_setup"] = final_candidate_setup
+        receipt["final_candidate_test"] = final_candidate
         receipt["status"] = "passed-current-master-socket-tap-and-baseline-control"
     except Exception as error:
         receipt["error"] = str(error)

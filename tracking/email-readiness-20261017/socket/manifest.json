@@ -16,5 +16,5 @@
       "stable_patch_id": "cba911a70cdef9cd05c6c4ce526c30600aa82510"
     }
   ],
-  "scope": "Apply the exact public proposal and its Windows TAP test supplement to current master. On native x64 and ARM64, build and run only pg_ctl/005_socket_handle_inheritance. A test-only baseline control omits the two production socket changes and must fail only the two socket-lifetime assertions. This is not a full regression-suite or Job Objects test."
+  "scope": "Apply the exact public proposal and its Windows TAP test supplement to current master. On native x64 and ARM64, build the candidate, run PostgreSQL's setup suite to create its temporary install and initdb template, then run only pg_ctl/005_socket_handle_inheritance. Repeat setup and the focused test for the unpatched production-code baseline, which must fail only the two socket-lifetime assertions, then restore, rebuild, set up, and rerun the candidate. Preflight the unrelated cube parser generators because the prior x64 build reported missing generated files. This is not a full regression-suite or Job Objects test."
 }
