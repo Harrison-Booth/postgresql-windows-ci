@@ -1,15 +1,14 @@
-From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From 0004ca9411992b853af2ac0749191e84b56a1565 Mon Sep 17 00:00:00 2001
 From: Harrison Booth <harrisontbooth@gmail.com>
-Date: Wed, 14 Oct 2026 19:22:08 -0500
+Date: Tue, 20 Oct 2026 14:10:16 -0500
 Subject: [PATCH] Add bounded Windows socket inheritance regression coverage
 
-Regression and test-registration supplement to Bryan Green's original
-socket inheritance proposal, which must be applied first and retains its
-original authorship and mail bytes. Production proposal remains Bryan's.
+Regression and test-registration supplement to Bryan Green's original socket inheritance proposal, which must be applied first and retains its original authorship and mail bytes. Production proposal remains Bryan's.
 
-Use the existing recorded local v5 test/helper registration representation.
-The ordered series is source-equivalent to the exact hosted combined v5
-input; do not apply that combined input as an additional patch.
+Use the existing recorded local v5 test/helper registration representation. The ordered series remains source-equivalent to the exact hosted combined v5 input; do not apply that combined input as an additional patch.
+
+Force a fresh initdb for this TAP test so it does not rely on the installed initdb template's file attributes when pg_regress configures authentication.
+
 Portable reviewer adaptation and Job-aware joint coverage remain separate.
 ---
  src/bin/pg_ctl/Makefile                       |  11 +-
@@ -22,7 +21,7 @@ Portable reviewer adaptation and Job-aware joint coverage remain separate.
  create mode 100644 src/bin/pg_ctl/t/socket_copy_helper.c
 
 diff --git a/src/bin/pg_ctl/Makefile b/src/bin/pg_ctl/Makefile
-index 5c2d4180980e8a9fa9ae5f35a8d01f8949ea35ce..2099161c30d39c36bf29be2b6e7eb0502c1c0a87 100644
+index 5c2d418..2099161 100644
 --- a/src/bin/pg_ctl/Makefile
 +++ b/src/bin/pg_ctl/Makefile
 @@ -43,7 +43,7 @@ uninstall:
@@ -48,7 +47,7 @@ index 5c2d4180980e8a9fa9ae5f35a8d01f8949ea35ce..2099161c30d39c36bf29be2b6e7eb050
 +export PG_CTL_SOCKET_HELPER := $(abspath pg_ctl_socket_helper$(X))
 +endif
 diff --git a/src/bin/pg_ctl/meson.build b/src/bin/pg_ctl/meson.build
-index 3e6468116b7c71279990c7b3ecd4c6eeb3b84b10..4f0e677bdaccdaf24c7ee6019a806de6abfd618f 100644
+index 3e64681..4f0e677 100644
 --- a/src/bin/pg_ctl/meson.build
 +++ b/src/bin/pg_ctl/meson.build
 @@ -17,11 +17,21 @@ pg_ctl = executable('pg_ctl',
@@ -74,7 +73,7 @@ index 3e6468116b7c71279990c7b3ecd4c6eeb3b84b10..4f0e677bdaccdaf24c7ee6019a806de6
        't/001_start_stop.pl',
        't/002_status.pl',
 diff --git a/src/bin/pg_ctl/t/005_socket_handle_inheritance.pl b/src/bin/pg_ctl/t/005_socket_handle_inheritance.pl
-index 63e19557f7188d6371e1118e745e2337209aafd4..97f58c920e0a88b84480253997d514eca51f4658 100644
+index 63e1955..3c12c05 100644
 --- a/src/bin/pg_ctl/t/005_socket_handle_inheritance.pl
 +++ b/src/bin/pg_ctl/t/005_socket_handle_inheritance.pl
 @@ -1,134 +1,152 @@
@@ -261,7 +260,7 @@ index 63e19557f7188d6371e1118e745e2337209aafd4..97f58c920e0a88b84480253997d514ec
  
 -# Get process name by PID
 -sub get_process_name
-+$node->init;
++$node->init(force_initdb => 1);
 +$node->append_conf('postgresql.conf', "listen_addresses = '127.0.0.1'");
 +# The raw test client does not implement the default Windows SSPI exchange.
 +# Change only this disposable node's loopback authentication rule.
@@ -300,7 +299,10 @@ index 63e19557f7188d6371e1118e745e2337209aafd4..97f58c920e0a88b84480253997d514ec
 +write_packet('Q' . pack('N', length($query) + 4) . $query);
 +my $deadline = time + 10;
 +while (time < $deadline)
-+{
+ {
+-	system('powershell -Command "Get-Process powershell -ErrorAction SilentlyContinue | Where-Object {$_.Id -ne $PID} | Stop-Process -Force -ErrorAction SilentlyContinue" 2>nul');
+-}
+\ No newline at end of file
 +	if (-f $ready)
 +	{
 +		my $identity = slurp_file($ready);
@@ -329,10 +331,7 @@ index 63e19557f7188d6371e1118e745e2337209aafd4..97f58c920e0a88b84480253997d514ec
 +$deadline = time + 5;
 +my $bound = 1;
 +while (time < $deadline)
- {
--	system('powershell -Command "Get-Process powershell -ErrorAction SilentlyContinue | Where-Object {$_.Id -ne $PID} | Stop-Process -Force -ErrorAction SilentlyContinue" 2>nul');
--}
-\ No newline at end of file
++{
 +	$bound = helper_exit('--bind', $node->port);
 +	last if $bound == 0;
 +	sleep 0.05;
@@ -342,7 +341,7 @@ index 63e19557f7188d6371e1118e745e2337209aafd4..97f58c920e0a88b84480253997d514ec
 +done_testing();
 diff --git a/src/bin/pg_ctl/t/meson.build b/src/bin/pg_ctl/t/meson.build
 new file mode 100644
-index 0000000000000000000000000000000000000000..622deb7d1fe32a1d54f65d8b4090ebbad7f61955
+index 0000000..622deb7
 --- /dev/null
 +++ b/src/bin/pg_ctl/t/meson.build
 @@ -0,0 +1,10 @@
@@ -358,7 +357,7 @@ index 0000000000000000000000000000000000000000..622deb7d1fe32a1d54f65d8b4090ebba
 +)
 diff --git a/src/bin/pg_ctl/t/socket_copy_helper.c b/src/bin/pg_ctl/t/socket_copy_helper.c
 new file mode 100644
-index 0000000000000000000000000000000000000000..79fac3c8c57eb221edbf88efb995684981f66da5
+index 0000000..79fac3c
 --- /dev/null
 +++ b/src/bin/pg_ctl/t/socket_copy_helper.c
 @@ -0,0 +1,79 @@

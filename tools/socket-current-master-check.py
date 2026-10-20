@@ -5,13 +5,12 @@ import os
 from pathlib import Path
 import platform
 import re
-import stat
 import subprocess
 import sys
 import time
 
-BASE = "776df8a6d7c42282825d658ff631509f033e8f34"
-EXPECTED_TREE = "d1ed458cd5faee39a92c58e9bedb5828e3d333a3"
+BASE = "b536d5a0bd7a0e35c3168f3022183f37cb5c2058"
+EXPECTED_TREE = "7784152fd2ced2c424e201e4718e1c8c6eac737b"
 PRODUCTION_FILES = [
     "src/backend/port/win32/socket.c",
     "src/backend/tcop/backend_startup.c",
@@ -90,6 +89,16 @@ def run_tap(python, build, evidence, label, expect_baseline=False):
             encoding="utf-8", errors="replace")
     else:
         text = log.read_text(encoding="utf-8", errors="replace")
+    regress_log = (build / "testrun" / "pg_ctl" /
+                   "005_socket_handle_inheritance" / "log" /
+                   "regress_log_005_socket_handle_inheritance")
+    if not regress_log.is_file():
+        raise RuntimeError(label + " did not preserve the focused TAP regression log")
+    regress_text = regress_log.read_text(encoding="utf-8", errors="replace")
+    (evidence / (label + "-regress-log.txt")).write_bytes(regress_log.read_bytes())
+    text += "\n" + regress_text
+    if "initializing database system by running initdb" not in text:
+        raise RuntimeError(label + " did not use the test's forced fresh initdb path")
     results = tap_results(text)
     if sorted(results) != list(range(1, 10)):
         raise RuntimeError(label + " did not report all nine TAP assertions")
@@ -108,6 +117,7 @@ def run_tap(python, build, evidence, label, expect_baseline=False):
         raise RuntimeError("Candidate TAP assertions failed: " + repr(failed))
     result["tap_assertions"] = results
     result["expected_baseline_failure_control"] = expect_baseline
+    result["test_cluster_initialization"] = "force_initdb; copied install template bypassed"
     return result
 
 
@@ -122,23 +132,12 @@ def run_setup(python, build, evidence, label):
     template = build / "tmp_install" / "initdb-template"
     if not template.is_dir() or not any(template.iterdir()):
         raise RuntimeError(label + " setup suite did not create a usable initdb template")
-    readonly = []
-    for path in template.rglob("*"):
-        if path.is_file():
-            mode = path.stat().st_mode
-            if not mode & stat.S_IWRITE:
-                os.chmod(path, mode | stat.S_IWRITE)
-                readonly.append(str(path.relative_to(template)))
     hba = template / "pg_hba.conf"
     if not hba.is_file():
         raise RuntimeError(label + " initdb template has no pg_hba.conf")
-    with hba.open("r+b") as stream:
-        stream.seek(0)
-        stream.flush()
     result["initdb_template"] = str(template)
     result["initdb_template_file_count"] = sum(1 for path in template.rglob("*") if path.is_file())
-    result["readonly_files_made_writable"] = readonly
-    result["pg_hba_write_preflight"] = True
+    result["initdb_template_used_by_tap_test"] = False
     return result
 
 
