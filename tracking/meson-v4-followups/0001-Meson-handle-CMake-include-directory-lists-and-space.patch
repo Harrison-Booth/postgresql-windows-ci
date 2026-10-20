@@ -1,0 +1,34 @@
+From 428e3c5e62505566ada32ac85b218b55f993947f Mon Sep 17 00:00:00 2001
+From: Harrison Booth <harrisontbooth@gmail.com>
+Date: Tue, 20 Oct 2026 10:00:58 -0500
+Subject: [PATCH 1/2] Meson: handle CMake include directory lists and spaces
+
+Normalize CMake include directory results before splitting them, so both string and array values are accepted. Escape spaces in the compiler flags exported for PGXS.
+---
+ meson.build | 9 ++++++---
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/meson.build b/meson.build
+index be77959..6bf91cc 100644
+--- a/meson.build
++++ b/meson.build
+@@ -3417,10 +3417,13 @@ foreach dep_name, dep_info : pgxs_flag_deps
+     foreach dep : dep_objs
+       incdirs = dep.get_variable(cmake: 'PACKAGE_INCLUDE_DIRS',
+                                  default_value: '')
+-      foreach incdir_raw : incdirs.split(';')
++      incdirs_list = []
++      incdirs_list += incdirs
++      foreach incdir_raw : ';'.join(incdirs_list).split(';')
+         incdir = incdir_raw.strip()
+-        if incdir != '' and '-I' + incdir not in dep_flags
+-          dep_flags += '-I' + incdir
++        incflag = '-I' + '\\ '.join(incdir.split(' '))
++        if incdir != '' and incflag not in dep_flags
++          dep_flags += incflag
+         endif
+       endforeach
+     endforeach
+-- 
+2.53.0.windows.2
+

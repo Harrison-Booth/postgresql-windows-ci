@@ -1,0 +1,36 @@
+{
+  "source_base": "e75fcc9867fdfe295957ad5c9a98cbe2e1b4c5c3",
+  "base_ref": "postgres/postgres master",
+  "prerequisite": {
+    "file": "0000-cf7300-v4-prerequisite-reformatted.patch",
+    "sha256": "e208d6415e5167d090b7b943168293c6379d7e679a26cf44729e15d80dc3702f",
+    "original_public_attachment_sha256": "80d08b863671adea7b28246ddfeee52f6889f366e102b6d8f8cd18ce4e41d598",
+    "patch_id": "ea6adfad44d930b14f7491ed7e86d3c3951fbcbf",
+    "authorship": "Aidar Imamov",
+    "repackaging_note": "Mail-formatted rendering generated from the locally applied public v4 commit for git-am testing. Its stable patch-id matches the public attachment and its resulting source tree is unchanged."
+  },
+  "followups": [
+    {
+      "file": "0001-Meson-handle-CMake-include-directory-lists-and-space.patch",
+      "sha256": "2e23448fd0bd976a5870d2fedcbebe5f31e7628517347338ded5b432c45dfa66",
+      "patch_id": "25cd886876ace2353f04a6c444b93643fa5c10d8",
+      "purpose": "Handle CMake include-directory results returned as either strings or arrays, and escape spaces in exported include flags."
+    },
+    {
+      "file": "0002-Keep-external-include-flags-after-PostgreSQL-headers.patch",
+      "sha256": "1d92b731edfa1650ab901b3fe9a265af4cf0a1f0ccd4008ca4f069de96503e48",
+      "patch_id": "dba98e250783f29a5cb02d47a485631bd1ed5d36",
+      "purpose": "Keep external include flags behind PostgreSQL headers and pass the same flags into fallback header probes."
+    }
+  ],
+  "required_order": [
+    "0000-cf7300-v4-prerequisite-reformatted.patch",
+    "0001-Meson-handle-CMake-include-directory-lists-and-space.patch",
+    "0002-Keep-external-include-flags-after-PostgreSQL-headers.patch"
+  ],
+  "verification": {
+    "native_builds": "GitHub-hosted Windows x64 and ARM64 only",
+    "meson_versions": ["0.57.2", "1.11.2"],
+    "scope": "Controlled CMake/pkg-config include export cases and actual psql header-order canary builds. No full server, installed extension, provider, or PGXS runtime claim."
+  }
+}
