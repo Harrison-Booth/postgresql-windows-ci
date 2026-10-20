@@ -73,36 +73,6 @@ def require_success(args, name, cwd=None):
         raise SystemExit(f"{name} failed; see {log}")
     return log
 
-# Apply the exact Gmail attachment as a mail patch on a clean current-master checkout.
-mail_application_log = require_success(
-    ["git", "-C", str(src), "-c", "user.name=PostgreSQL CI validation",
-     "-c", "user.email=ci@example.invalid", "am", "--keep-cr", str(mail_attachment)],
-    "git-am-exact-mail-attachment",
-)
-mail_head = subprocess.check_output(["git", "-C", str(src), "rev-parse", "HEAD"], text=True).strip()
-mail_tree = subprocess.check_output(["git", "-C", str(src), "rev-parse", "HEAD^{tree}"], text=True).strip()
-mail_changed = subprocess.check_output(
-    ["git", "-C", str(src), "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"],
-    text=True,
-).splitlines()
-if mail_changed != ["src/include/libpq/libpq.h"]:
-    raise SystemExit("Exact mail attachment changed unexpected files: " + repr(mail_changed))
-mail_application = {
-    "method": "git am --keep-cr",
-    "exit_code": 0,
-    "base": base,
-    "head": mail_head,
-    "tree": mail_tree,
-    "attachment_sha256": sha256(mail_attachment),
-    "patch_id": patch_id(mail_attachment),
-    "changed_files": mail_changed,
-    "log_sha256": sha256(mail_application_log),
-    "committer_identity_scope": "single git am command; attachment author preserved",
-}
-require_success(["git", "-C", str(src), "reset", "--hard", base], "restore-clean-current-master")
-if subprocess.check_output(["git", "-C", str(src), "rev-parse", "HEAD"], text=True).strip() != base:
-    raise SystemExit("Could not restore the pristine current-master checkout")
-
 # Replay the public proposal on current master, then prove the attached fix is needed.
 require_success(["git", "-C", str(src), "apply", "--check", str(replay_patch)], "check-public-replay-apply")
 require_success(["git", "-C", str(src), "apply", str(replay_patch)], "apply-public-replay")
@@ -118,8 +88,34 @@ baseline_text = baseline_log.read_text(errors="replace")
 if baseline_code == 0 or "SSL_LIBRARY" not in baseline_text or not ("undeclared" in baseline_text or "C2065" in baseline_text):
     raise SystemExit("Expected the rebased public proposal to fail only on undefined SSL_LIBRARY with SSL disabled")
 
-require_success(["git", "-C", str(src), "apply", "--check", str(followup_patch)], "check-exact-followup-apply")
-require_success(["git", "-C", str(src), "apply", str(followup_patch)], "apply-exact-followup")
+# The attached follow-up depends on the public proposal's SSL_LIBRARY block.
+# Apply the exact Gmail attachment after that prerequisite, then build it.
+mail_application_log = require_success(
+    ["git", "-C", str(src), "-c", "user.name=PostgreSQL CI validation",
+     "-c", "user.email=ci@example.invalid", "am", "--keep-cr", str(mail_attachment)],
+    "git-am-exact-mail-attachment-after-public-replay",
+)
+mail_head = subprocess.check_output(["git", "-C", str(src), "rev-parse", "HEAD"], text=True).strip()
+mail_tree = subprocess.check_output(["git", "-C", str(src), "rev-parse", "HEAD^{tree}"], text=True).strip()
+mail_changed = subprocess.check_output(
+    ["git", "-C", str(src), "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"],
+    text=True,
+).splitlines()
+if mail_changed != ["src/include/libpq/libpq.h"]:
+    raise SystemExit("Exact mail attachment changed unexpected files: " + repr(mail_changed))
+mail_application = {
+    "method": "git am --keep-cr after current-master public replay",
+    "exit_code": 0,
+    "base": base,
+    "prerequisite_head": subprocess.check_output(["git", "-C", str(src), "rev-parse", "HEAD^"], text=True).strip(),
+    "head": mail_head,
+    "tree": mail_tree,
+    "attachment_sha256": sha256(mail_attachment),
+    "patch_id": patch_id(mail_attachment),
+    "changed_files": mail_changed,
+    "log_sha256": sha256(mail_application_log),
+    "committer_identity_scope": "single git am command; attachment author preserved",
+}
 require_success(["git", "-C", str(src), "diff", "--check"], "series-whitespace-check")
 require_success(["ninja", "-C", str(build), "-j", "4", "src/backend/postgres.exe"], "candidate-build")
 

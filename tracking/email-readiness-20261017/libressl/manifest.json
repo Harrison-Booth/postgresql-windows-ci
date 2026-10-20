@@ -29,5 +29,5 @@
     "stable_patch_id": "3d181bbb91992ab709488f064eb08988c18638fe",
     "author": "Harrison Booth"
   },
-  "scope": "On current PostgreSQL master, apply the exact outgoing mail-formatted follow-up with git am, then separately replay the public CF7008 proposal and normalized equivalent follow-up to reproduce the no-SSL failure and build the corrected server on native Windows x64 and ARM64. The test checks provider-name macro selection only; it does not run SSL providers or establish full LibreSSL compatibility."
+  "scope": "On current PostgreSQL master, replay the public CF7008 proposal to reproduce the no-SSL failure, then apply the exact outgoing mail-formatted follow-up with git am and build the corrected server on native Windows x64 and ARM64. The normalized diff is checked by SHA256 and stable patch ID against the exact attachment. The test checks provider-name macro selection only; it does not run SSL providers or establish full LibreSSL compatibility."
 }
