@@ -1,0 +1,33 @@
+From 5e6ed67b4aada6bb312ae733890c76149fbe966e Mon Sep 17 00:00:00 2001
+From: Harrison Booth <harrisontbooth@gmail.com>
+Date: Tue, 20 Oct 2026 11:50:45 -0500
+Subject: [PATCH] libpq: define SSL_LIBRARY without SSL
+
+Keep SSL_LIBRARY defined in builds that do not enable an SSL provider. The CF7008 provider split references the macro outside SSL-enabled code paths, so leave the provider selection conditional but make the empty-provider case available too.
+---
+ src/include/libpq/libpq.h | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/src/include/libpq/libpq.h b/src/include/libpq/libpq.h
+index 05d8083..4fbd1cb 100644
+--- a/src/include/libpq/libpq.h
++++ b/src/include/libpq/libpq.h
+@@ -122,7 +122,6 @@ extern PGDLLIMPORT bool SSLPreferServerCiphers;
+ extern PGDLLIMPORT bool ssl_loaded_verify_locations;
+ #endif
+ 
+-#ifdef USE_SSL
+ #if defined(USE_OPENSSL)
+ #define SSL_LIBRARY "OpenSSL"
+ #elif defined(USE_LIBRESSL)
+@@ -130,7 +129,6 @@ extern PGDLLIMPORT bool ssl_loaded_verify_locations;
+ #else
+ #define SSL_LIBRARY ""
+ #endif
+-#endif
+ 
+ #ifdef USE_SSL
+ #define DEFAULT_SSL_CIPHERS "HIGH:MEDIUM:+3DES:!aNULL"
+-- 
+2.53.0.windows.2
+

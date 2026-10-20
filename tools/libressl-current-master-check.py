@@ -22,17 +22,20 @@ machine = platform.machine().lower()
 if not ((arch == "arm64" and machine in ("arm64", "aarch64")) or (arch == "x64" and machine in ("amd64", "x86_64"))):
     raise SystemExit("Native host architecture mismatch")
 
-base = "776df8a6d7c42282825d658ff631509f033e8f34"
+base = "3745790f53bc5dd87b2df3d5a0c9c62d7ff0360d"
 assert subprocess.check_output(["git", "-C", str(src), "rev-parse", "HEAD"], text=True).strip() == base
 manifest = json.loads((ci / "tracking/email-readiness-20261017/libressl/manifest.json").read_text(encoding="utf-8"))
+if manifest["upstream_base"] != base:
+    raise SystemExit("Manifest upstream base mismatch")
 inputs = {entry["path"]: entry for entry in manifest["inputs"]}
 replay_patch = ci / "tracking/email-readiness-20261017/libressl/current-master-public-vpoc-replay.patch"
-followup_patch = ci / "tracking/email-readiness-20261017/libressl/0001-libpq-define-SSL_LIBRARY-without-SSL.diff"
+followup_diff = ci / "tracking/email-readiness-20261017/libressl/0001-libpq-define-SSL_LIBRARY-without-SSL.diff"
+mail_patch = ci / "tracking/email-readiness-20261017/libressl/0001-libpq-define-SSL_LIBRARY-without-SSL.patch"
 
 def sha256(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
-for path in (replay_patch, followup_patch):
+for path in (replay_patch, followup_diff, mail_patch):
     if sha256(path) != inputs[path.name]["sha256"]:
         raise SystemExit(f"Patch SHA256 mismatch: {path.name}")
 
@@ -42,9 +45,13 @@ def patch_id(path):
         raise SystemExit(f"Could not compute patch-id for {path.name}")
     return result.stdout.decode("ascii").split()[0]
 
-for path in (replay_patch, followup_patch):
+for path in (replay_patch, followup_diff, mail_patch):
     if patch_id(path) != inputs[path.name]["stable_patch_id"]:
         raise SystemExit(f"Stable patch-id mismatch: {path.name}")
+if sha256(mail_patch) != inputs[followup_diff.name]["source_attachment_sha256"]:
+    raise SystemExit("Exact Gmail patch bytes do not match the normalized-diff source hash")
+if patch_id(mail_patch) != patch_id(followup_diff):
+    raise SystemExit("Exact Gmail patch does not match normalized diff patch-id")
 
 results = []
 
@@ -79,9 +86,17 @@ baseline_text = baseline_log.read_text(errors="replace")
 if baseline_code == 0 or "SSL_LIBRARY" not in baseline_text or not ("undeclared" in baseline_text or "C2065" in baseline_text):
     raise SystemExit("Expected the rebased public proposal to fail only on undefined SSL_LIBRARY with SSL disabled")
 
-require_success(["git", "-C", str(src), "apply", "--check", str(followup_patch)], "check-exact-followup-apply")
-require_success(["git", "-C", str(src), "apply", str(followup_patch)], "apply-exact-followup")
-require_success(["git", "-C", str(src), "diff", "--check"], "series-whitespace-check")
+require_success(["git", "-C", str(src), "add", "-A"], "stage-public-replay-for-git-am")
+require_success(
+    ["git", "-C", str(src), "-c", "user.name=PostgreSQL CI test", "-c", "user.email=ci-test@example.invalid", "commit", "--no-gpg-sign", "-m", "Temporary local replay of public CF7008 proposal for testing"],
+    "record-temporary-public-replay",
+)
+replay_commit = subprocess.check_output(["git", "-C", str(src), "rev-parse", "HEAD"], text=True).strip()
+require_success(
+    ["git", "-C", str(src), "-c", "user.name=PostgreSQL CI test", "-c", "user.email=ci-test@example.invalid", "am", str(mail_patch)],
+    "git-am-exact-email-attachment",
+)
+require_success(["git", "-C", str(src), "diff", "--check", "HEAD^", "HEAD"], "series-whitespace-check")
 require_success(["ninja", "-C", str(build), "-j", "4", "src/backend/postgres.exe"], "candidate-build")
 
 header = (src / "src/include/libpq/libpq.h").read_text(encoding="utf-8")
@@ -115,17 +130,20 @@ if pe_machine != expected_machine:
 
 record = {
     "upstream_base": base,
+    "temporary_public_replay_commit": replay_commit,
     "public_replay_sha256": sha256(replay_patch),
     "public_replay_patch_id": patch_id(replay_patch),
-    "followup_diff_sha256": sha256(followup_patch),
-    "followup_patch_id": patch_id(followup_patch),
+    "followup_diff_sha256": sha256(followup_diff),
+    "followup_attachment_sha256": sha256(mail_patch),
+    "followup_patch_id": patch_id(mail_patch),
+    "followup_attachment_git_am": "passed",
     "host_arch": arch,
     "baseline_error": "SSL_LIBRARY undefined with SSL disabled on the current-master replay of the public proposal",
     "candidate_build": "passed",
     "target_pe_machine": hex(pe_machine),
     "binary_sha256": hashlib.sha256(raw).hexdigest(),
     "macro_controls": controls,
-    "scope": "Current PostgreSQL master plus a local replay of public CF7008 proposal and the exact follow-up code diff; no SSL provider runtime",
+    "scope": "Exact current PostgreSQL master plus a local replay of the public CF7008 proposal; the exact Gmail follow-up attachment was applied with git am; no SSL provider runtime",
 }
 (out / "completion.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
 print(json.dumps(record))
