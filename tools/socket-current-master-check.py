@@ -215,7 +215,8 @@ def main():
     receipt = {
         "status": "failed",
         "upstream_base": BASE,
-        "candidate_tree": EXPECTED_TREE,
+        "candidate_tree": None,
+        "candidate_tree_pre_pinned": expected_tree is not None,
         "host_architecture": args.arch,
         "github_run_id": os.environ.get("GITHUB_RUN_ID"),
         "github_revision": os.environ.get("GITHUB_SHA"),
