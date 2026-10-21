@@ -22,7 +22,7 @@ machine = platform.machine().lower()
 if not ((arch == "arm64" and machine in ("arm64", "aarch64")) or (arch == "x64" and machine in ("amd64", "x86_64"))):
     raise SystemExit("Native host architecture mismatch")
 
-base = "4b97fd15fb497d2810a29cd30bfacd89400b596c"
+base = "dd568b047acc7cf7c13bcb397506ba850eb5a9e7"
 assert subprocess.check_output(["git", "-C", str(src), "rev-parse", "HEAD"], text=True).strip() == base
 manifest = json.loads((ci / "tracking/email-readiness-20261017/libressl/manifest.json").read_text(encoding="utf-8"))
 if manifest["upstream_base"] != base:
