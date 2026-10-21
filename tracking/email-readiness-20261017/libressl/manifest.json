@@ -1,5 +1,5 @@
 {
-  "upstream_base": "6b9f40d49ae33eb0b4a7c77666fe4971ef7ba087",
+  "upstream_base": "c00a97b646c04c0d895cca44a2b24ad7abec8a6c",
   "upstream_url": "https://git.postgresql.org/git/postgresql.git",
   "candidate": "Daniel Gustafsson CF7008 public LibreSSL/OpenSSL split, locally replayed for test against current master",
   "original_public_attachment": {
