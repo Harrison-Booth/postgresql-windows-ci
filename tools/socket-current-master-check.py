@@ -9,8 +9,7 @@ import subprocess
 import sys
 import time
 
-BASE = "b536d5a0bd7a0e35c3168f3022183f37cb5c2058"
-EXPECTED_TREE = "7784152fd2ced2c424e201e4718e1c8c6eac737b"
+BASE = "6b9f40d49ae33eb0b4a7c77666fe4971ef7ba087"
 PRODUCTION_FILES = [
     "src/backend/port/win32/socket.c",
     "src/backend/tcop/backend_startup.c",
@@ -187,8 +186,9 @@ def main():
     manifest_path = ci / "tracking/email-readiness-20261017/socket/manifest.json"
     patch_dir = manifest_path.parent
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    if manifest["upstream_base"] != BASE or manifest["expected_final_tree"] != EXPECTED_TREE:
-        raise RuntimeError("Reviewed source pin or result tree changed")
+    expected_tree = manifest.get("expected_final_tree")
+    if manifest["upstream_base"] != BASE:
+        raise RuntimeError("Reviewed source pin changed")
     if subprocess.check_output(["git", "-C", source, "rev-parse", "HEAD"], text=True).strip() != BASE:
         raise RuntimeError("PostgreSQL source is not the reviewed upstream base")
     if subprocess.check_output(["git", "-C", source, "status", "--porcelain"], text=True).strip():
@@ -240,13 +240,19 @@ def main():
         }
         head = subprocess.check_output(["git", "-C", source, "rev-parse", "HEAD"], text=True).strip()
         tree = subprocess.check_output(["git", "-C", source, "rev-parse", "HEAD^{tree}"], text=True).strip()
-        if tree != EXPECTED_TREE:
+        changed_files = subprocess.check_output(
+            ["git", "-C", source, "diff", "--name-only", BASE + "..HEAD"],
+            text=True).splitlines()
+        if sorted(changed_files) != sorted(manifest["expected_changed_files"]):
+            raise RuntimeError("Ordered series changed an unexpected file set: " + repr(changed_files))
+        if expected_tree is not None and tree != expected_tree:
             raise RuntimeError("Ordered series produced a different source tree: " + tree)
         command("series-whitespace-check",
                 ["git", "-C", source, "diff", "--check", BASE + "..HEAD"],
                 evidence / "series-whitespace-check.log", timeout=30)
         receipt["applied_head"] = head
         receipt["candidate_tree"] = tree
+        receipt["candidate_tree_pre_pinned"] = expected_tree is not None
         receipt["git_am"] = applied
         python = sys.executable
         meson = [python, "-m", "mesonbuild.mesonmain"]

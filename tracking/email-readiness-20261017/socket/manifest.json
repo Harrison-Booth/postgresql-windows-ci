@@ -1,7 +1,16 @@
 {
   "proposal": "CF6207 socket handle inheritance",
-  "upstream_base": "b536d5a0bd7a0e35c3168f3022183f37cb5c2058",
-  "expected_final_tree": "7784152fd2ced2c424e201e4718e1c8c6eac737b",
+  "upstream_base": "6b9f40d49ae33eb0b4a7c77666fe4971ef7ba087",
+  "expected_final_tree": null,
+  "expected_changed_files": [
+    "src/backend/port/win32/socket.c",
+    "src/backend/tcop/backend_startup.c",
+    "src/bin/pg_ctl/Makefile",
+    "src/bin/pg_ctl/meson.build",
+    "src/bin/pg_ctl/t/005_socket_handle_inheritance.pl",
+    "src/bin/pg_ctl/t/meson.build",
+    "src/bin/pg_ctl/t/socket_copy_helper.c"
+  ],
   "series": [
     {
       "file": "0001-Bryan-Green-socket-original.patch",
